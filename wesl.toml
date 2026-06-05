@@ -1,0 +1,13 @@
+[package]
+# Version of WESL used in this project.
+edition = "2026_pre"
+
+# Optional, can be auto-inferred from the existence of a package manager file.
+# Inclusion of this field is encouraged.
+#
+# Where are the shaders located. This is the path of `package::`.
+root = "./assets/shaders"
+
+# Lists all used dependencies
+[dependencies]
+bevy-wgsl = {}
