@@ -1,4 +1,4 @@
-use bevy::{ecs::relationship::DescendantIter, prelude::*};
+use bevy::prelude::*;
 
 use crate::target_spawner::TargetSpawner;
 // Marker component for targets

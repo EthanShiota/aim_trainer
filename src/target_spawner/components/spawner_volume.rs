@@ -19,7 +19,7 @@ impl SpawnerVolume {
         match self {
             SpawnerVolume::Sphere(sphere) => sphere.sample_interior(rng),
             SpawnerVolume::Cuboid(cuboid) => cuboid.sample_interior(rng),
-            SpawnerVolume::Torus(torus) => {
+            SpawnerVolume::Torus(_torus) => {
                 todo!();
             }
         }
@@ -28,7 +28,7 @@ impl SpawnerVolume {
         match self {
             SpawnerVolume::Sphere(sphere) => sphere.sample_boundary(rng),
             SpawnerVolume::Cuboid(cuboid) => cuboid.sample_boundary(rng),
-            SpawnerVolume::Torus(torus) => {
+            SpawnerVolume::Torus(_torus) => {
                 todo!();
             }
         }

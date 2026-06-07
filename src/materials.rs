@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::render_resource::AsBindGroup};
+use bevy::prelude::*;
 pub fn ground_material(asset_server: Res<AssetServer>) -> impl Into<StandardMaterial> {
     let basepath = "textures/Ground080_1K-PNG/Ground080_1K-PNG_";
     let res_path = |s| format!("{}{}.png", basepath, s);

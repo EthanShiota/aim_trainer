@@ -5,7 +5,7 @@ mod components;
 mod target_material;
 use components::spawner::*;
 pub use components::{
-    DebugMode, FireWeapon, SpawnerVolume, SpawnerVolumeMode, Target, TargetDestroyed, TargetHit,
+    DebugMode, FireWeapon, TargetDestroyed, TargetHit,
     TargetResource, TargetSpawner,
 };
 use target_material::TargetMaterial;

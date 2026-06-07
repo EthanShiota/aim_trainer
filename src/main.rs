@@ -2,37 +2,31 @@ mod materials;
 mod target_spawner;
 
 use std::marker::PhantomData;
-use std::ops::Deref;
 
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{
-    CameraOutputMode, ComputedCameraValues, Exposure, ImageRenderTarget, RenderTarget, Viewport,
+    Exposure, RenderTarget,
 };
 use bevy::camera_controller::free_camera::{FreeCamera, FreeCameraPlugin};
 use bevy::color::palettes::css::PINK;
 use bevy::core_pipeline::tonemapping::Tonemapping;
-use bevy::dev_tools::render_debug::{self, GlobalRenderDebugOverlay, RenderDebugOverlayPlugin};
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
 use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricLight};
 
-use bevy::log::LogPlugin;
-use bevy::mesh::CircleMeshBuilder;
 use bevy::pbr::{AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
-use bevy::render::render_resource::{BlendComponent, BlendState, TextureFormat};
-use bevy::scene::OnTemplate;
+use bevy::render::render_resource::TextureFormat;
 use bevy::text::TextSection;
-use bevy::window::{PrimaryWindow, WindowMode, WindowResized, WindowResolution};
+use bevy::window::{PrimaryWindow, WindowMode};
 use materials::ground_material;
 
 use target_spawner::FireWeapon;
-use tracing::Level;
 
-use crate::target_spawner::{TargetDestroyed, TargetHit};
+use crate::target_spawner::TargetDestroyed;
 
 #[derive(Resource, Deref, DerefMut)]
 struct Score(usize);
