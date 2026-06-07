@@ -5,7 +5,7 @@
     view_transformations::{uv_to_ndc, frag_coord_to_ndc}
 }
 #import bevy_render::view::direction_view_to_world;
-#import bevy_render::math
+#import bevy_render::maths
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> color: vec4<f32>;
 
@@ -23,20 +23,25 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let viewport_uv = uv_to_ndc(coords_to_viewport_uv(in.position.xy, view.viewport));
 
-    let dist = distance(viewport_uv * normalize(view.viewport.zw), vec2(0.0, 0.0));
-    if dist < 0.02 {
-        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-    }
+
     // let look_vector = direction_view_to_world(vec3<f32>(0.0,0.0,1.0), view.world_from_view);
-    let look_vector = view.world_position.xyz - in.world_position.xyz;
-    let intent = max(0.0, 1.0 - dot(normal, normalize(look_vector)));
+    let look_vector = direction_view_to_world(vec3<f32>(0.0,0.0,1.0), view.world_from_view);
+    let obj_vector = view.world_position.xyz - in.world_position.xyz;
+    let intent = max(0.0, 1.0 - dot(normal, normalize(obj_vector)));
     let rimlight = pow(intent, 9.0);
+
+    let dist = distance(viewport_uv * normalize(view.viewport.zw), vec2(0.0, 0.0));
+    let angle = acos(dot(normalize(look_vector),normalize(obj_vector)));
+    // var flash = vec4<f32>(0.0);
+    // if dist < 0.1 {
+    //   flash = vec4(sin(floor(2. - 2. * log(10. * dist)) + 10. *globals.time), 0.0, 0.0,0.0);
+    // }
 
     // 3. Return the Final Color
     // The final output of a fragment shader must be a `vec4<f32>` representing
     // an RGBA color. We construct our output by taking our calculated RGB `vec3`
     // and adding a fixed alpha component of 1.0 for full opacity.
     // return vec4<f32>(color, 1.0) 
-    return vec4<f32>(0.0, 0.0, 0.0, 1.0) + rimlight * color;
+    return (vec4<f32>(0.0, 0.0, 0.0, 1.0) + rimlight * color) + flash;
 }
 
