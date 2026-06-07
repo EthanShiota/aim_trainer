@@ -1,6 +1,9 @@
 mod materials;
 mod target_spawner;
 
+use std::marker::PhantomData;
+use std::ops::Deref;
+
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{
@@ -16,10 +19,12 @@ use bevy::light::light_consts::lux;
 use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricLight};
 
 use bevy::log::LogPlugin;
+use bevy::mesh::CircleMeshBuilder;
 use bevy::pbr::{AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::render_resource::{BlendComponent, BlendState, TextureFormat};
+use bevy::scene::OnTemplate;
 use bevy::text::TextSection;
 use bevy::window::{PrimaryWindow, WindowMode, WindowResized, WindowResolution};
 use materials::ground_material;
@@ -31,6 +36,17 @@ use crate::target_spawner::{TargetDestroyed, TargetHit};
 
 #[derive(Resource, Deref, DerefMut)]
 struct Score(usize);
+
+#[derive(Event)]
+struct PropagateChange<T>(PhantomData<T>)
+where
+    T: Resource;
+
+impl<T: Resource> Default for PropagateChange<T> {
+    fn default() -> Self {
+        Self(PhantomData::<T>)
+    }
+}
 
 fn main() {
     App::new()
@@ -94,7 +110,7 @@ struct Character {
 #[type_path = "api"]
 struct Ground();
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct ScoreUI;
 
 #[derive(Component)]
@@ -107,6 +123,21 @@ fn update_ui(score: Res<Score>, text: Query<&mut Text, With<ScoreUI>>) {
         }
     }
 }
+
+fn score_ui() -> impl Scene {
+    bsn! {
+        ScoreUI
+        Node {
+            top: Val::Px(0.),
+            left: Val::Px(0.),
+        }
+        Text
+        TextFont {
+            font_size: FontSize::Px(50.),
+        }
+    }
+}
+
 fn setup_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -119,19 +150,7 @@ fn setup_ui(
         Transform::default(),
     ));
 
-    commands.spawn((
-        ScoreUI,
-        Node {
-            top: Val::Px(0.),
-            left: Val::Px(0.),
-            ..default()
-        },
-        Text::new("score 0"),
-        TextFont {
-            font_size: FontSize::Px(50.),
-            ..default()
-        },
-    ));
+    commands.spawn_scene(score_ui());
 }
 
 fn startup(
@@ -143,20 +162,16 @@ fn startup(
     window: Single<&Window, With<PrimaryWindow>>,
     asset_server: Res<AssetServer>,
 ) {
-    // commands.spawn(SceneRoot(asset_server.load(
-    //     // Change this to your exported gltf fil
-    //     GltfAssetLabel::Scene(0).from_asset("Scene.glb"),
-    // )));
-    //
-    commands.spawn((
-        target_spawner::TargetSpawner(Timer::new(
-            std::time::Duration::from_millis(100),
-            TimerMode::Repeating,
-        )),
-        target_spawner::SpawnerVolumeMode::SampleBoundary,
-        target_spawner::SpawnerVolume::from(Sphere::new(100.)),
-        Transform::from_xyz(20., 10., 0.),
-    ));
+    // commands.spawn((
+    //     target_spawner::TargetSpawner(Timer::new(
+    //         std::time::Duration::from_millis(100),
+    //         TimerMode::Repeating,
+    //     )),
+    //     target_spawner::SpawnerVolumeMode::SampleBoundary,
+    //     target_spawner::SpawnerVolume::from(Sphere::new(100.)),
+    //     Transform::from_xyz(20., 10., 0.),
+    // ));
+
     commands.spawn((
         Mesh3d(
             meshes.add(
@@ -241,6 +256,7 @@ fn startup(
             },
         ))
         .id();
+    // 2d overlay camera
     commands.spawn((
         Node {
             width: Val::Percent(100.),
@@ -255,7 +271,6 @@ fn startup(
 
 fn fire_weapon(
     mut fire_weapon: MessageWriter<FireWeapon>,
-    mut window: Single<&mut Window, With<PrimaryWindow>>,
     transform: Single<&Transform, With<PlayerCamera>>,
 ) {
     fire_weapon.write(FireWeapon(**transform));
@@ -263,7 +278,6 @@ fn fire_weapon(
 
 fn toggle_fullscreen(
     mut window: Single<&mut Window, With<PrimaryWindow>>,
-    cam: Query<&mut Camera>,
     mut maximized: Local<bool>,
 ) {
     if *maximized {
@@ -274,7 +288,11 @@ fn toggle_fullscreen(
     *maximized = !*maximized;
 }
 
-fn update_score(e: On<TargetDestroyed>, mut score: ResMut<Score>) {
+fn update_score(
+    _: On<TargetDestroyed>,
+    mut score: ResMut<Score>,
+    mut score_ui: Single<&mut Text, With<ScoreUI>>,
+) {
     **score += 1;
-    println!("score: {}", **score);
+    *score_ui.get_text_mut() = format!("score: {}", **score);
 }

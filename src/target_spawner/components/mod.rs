@@ -12,24 +12,29 @@ pub struct TargetResource {
     pub material: Handle<TargetMaterial>,
 }
 
-#[derive(Component, Deref, DerefMut)]
+#[derive(Component, Deref, DerefMut, Clone, FromTemplate)]
 #[require(Visibility)]
 pub struct TargetSpawner(pub Timer);
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 #[require(SpawnerVolumeMode)]
 pub enum SpawnerVolume {
     Sphere(bevy::math::primitives::Sphere),
     Cuboid(bevy::math::primitives::Cuboid),
     Torus(bevy::math::primitives::Torus),
 }
+impl Default for SpawnerVolume {
+    fn default() -> Self {
+        Self::Sphere(Sphere::default())
+    }
+}
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone)]
 pub enum SpawnerVolumeMode {
     #[default]
     SampleInterior,
     SampleBoundary,
 }
 
-#[derive(Resource, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Resource, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct DebugMode(pub bool);
