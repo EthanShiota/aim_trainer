@@ -1,10 +1,10 @@
 [package]
-name = "my-new-project"
+name = "aim-game"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.19.0-rc.2", features = [
+bevy = { version = "0.19.0-rc.3", features = [
   "free_camera",
   "mesh_picking",
   "file_watcher",
@@ -14,7 +14,17 @@ bevy = { version = "0.19.0-rc.2", features = [
   "bevy_dev_tools",
   "shader_format_wesl",
   "detailed_trace",
+  "bevy_ui",
 ] }
+bevy_egui = "0.40.0-rc.1"
+bevy_skein = "0.6.0-rc.1"
+bevy-inspector-egui = { git = "https://github.com/taboky-dev/bevy-inspector-egui", rev = "873c32b" }
+symphonia-adapter-libopus = "0.3.0"
+symphonia = "0.6.0"
+cpal = "0.18.1"
+rodio = { version = "0.22.2", features = ["playback"] }
+dasp = "0.11.0"
+# avian3d = "0.6.1"
 # bevy_rapier3d = "0.34.0"
 # bevy_skein = "0.5.0-rc.1"
 # Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.

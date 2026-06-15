@@ -1,24 +1,31 @@
 use bevy::{
-    camera::visibility::RenderLayers, input::common_conditions::input_just_pressed, prelude::*,
+    asset::io::embedded::GetAssetServer, camera::visibility::RenderLayers,
+    input::common_conditions::input_just_pressed, prelude::*,
 };
 mod components;
 mod target_material;
-use components::spawner::*;
-pub use components::{
-    DebugMode, FireWeapon, TargetDestroyed, TargetHit,
-    TargetResource, TargetSpawner,
-};
+pub use components::*;
 use target_material::TargetMaterial;
 
-use components::{destroy_hit_targets, handle_fire_weapon, move_targets, spawner::SpawnerGizmo};
+use crate::AppState;
 
 pub struct TargetPlugin;
+
+#[derive(States, Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq, Default)]
+pub enum SpawnerState {
+    #[default]
+    Active,
+    Inactive,
+}
 
 impl Plugin for TargetPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_plugin)
-            .insert_resource(DebugMode(true))
+            .insert_resource(DebugMode(false))
+            .init_state::<SpawnerState>()
+            // INFO: Target Material
             .add_plugins(MaterialPlugin::<TargetMaterial>::default())
+            // INFO: Gizmo
             .insert_gizmo_config(
                 SpawnerGizmo,
                 GizmoConfig {
@@ -33,14 +40,41 @@ impl Plugin for TargetPlugin {
                         .and_then(resource_equals(DebugMode(true))),
                 ),
             )
+            // INFO: Messages
             .add_message::<TargetHit>()
             .add_message::<FireWeapon>()
-            .add_systems(Update, (handle_fire_weapon, destroy_hit_targets))
+            // INFO: Handle target hit
+            .add_systems(
+                Update,
+                (handle_fire_weapon, destroy_hit_targets).run_if(in_state(AppState::InGame)),
+            )
+            // INFO: Spawner Debug
             .add_systems(
                 Update,
                 (draw_spawners).run_if(resource_equals(DebugMode(true))),
             )
-            .add_systems(Update, (spawner_loop, move_targets));
+            .add_systems(Update, spawner_loop.run_if(in_state(SpawnerState::Active)))
+            .world_mut()
+            .register_component_hooks::<TargetSpawner>()
+            .on_add(|mut world, context| {
+                let ent = world.entity(context.entity);
+
+                if let Ok(mesh) = ent.get_components::<&Mesh3d>() {
+                    log::info!("mesh!");
+                    let triangles = world
+                        .get_resource::<Assets<Mesh>>()
+                        .and_then(|a| a.get(mesh.0.id()))
+                        .and_then(|m| m.triangles().ok())
+                        .unwrap()
+                        .collect();
+                    let entity = ent.entity();
+                    world
+                        .commands()
+                        .entity(entity)
+                        .insert(SpawnerVolume::Mesh(triangles));
+                    world.commands().entity(entity).remove::<Mesh3d>();
+                }
+            });
     }
 }
 
@@ -50,7 +84,7 @@ fn setup_plugin(
     mut materials: ResMut<Assets<TargetMaterial>>,
 ) {
     commands.insert_resource(TargetResource {
-        mesh: meshes.add(Sphere::new(3.)),
+        mesh: meshes.add(Sphere::new(1.)),
         material: materials.add(TargetMaterial {
             color: LinearRgba::RED * 10.,
         }),

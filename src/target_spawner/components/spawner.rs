@@ -1,8 +1,31 @@
-use super::*;
+use std::time::Duration;
+
+use bevy::prelude::*;
+
 use crate::PlayerCamera;
+
+use super::*;
 
 #[derive(GizmoConfigGroup, Default, Reflect)]
 pub struct SpawnerGizmo;
+
+#[derive(Component, Clone, FromTemplate, Reflect)]
+#[require(Visibility)]
+#[reflect(Component)]
+#[type_path = "api"]
+pub struct TargetSpawner {
+    pub timer: Timer,
+    pub limit: Option<usize>,
+}
+
+impl TargetSpawnerTemplate {
+    pub fn new(period: Duration, limit: Option<usize>) -> Self {
+        Self {
+            timer: Timer::new(period, TimerMode::Repeating),
+            limit,
+        }
+    }
+}
 
 pub fn draw_spawners(
     targets: Query<(&Transform, &SpawnerVolume)>,
@@ -20,6 +43,9 @@ pub fn draw_spawners(
             }
             SpawnerVolume::Torus(torus) => {
                 gizmos.primitive_3d(torus, isometry, color);
+            }
+            SpawnerVolume::Mesh(_mesh) => {
+                gizmos.sphere(isometry, 3., color.lighter(0.1));
             }
         }
     }
@@ -45,18 +71,27 @@ pub fn spawner_loop(
     target_res: Res<TargetResource>,
     spawners: Query<(
         Entity,
+        &Transform,
         &mut TargetSpawner,
         &SpawnerVolume,
         &SpawnerVolumeMode,
+        Option<&Children>,
     )>,
     time: Res<Time>,
 ) {
-    for (entity, mut spawner, vol, mode) in spawners {
-        if spawner.tick(time.delta()).just_finished() {
+    for (entity, transform, mut spawner, vol, mode, targets) in spawners {
+        if !spawner
+            .limit
+            .is_none_or(|limit| targets.map(|c| c.len()).unwrap_or_default() < limit)
+        {
+            continue;
+        }
+        if spawner.timer.tick(time.delta()).just_finished() {
             let target_translation = match mode {
                 SpawnerVolumeMode::SampleInterior => vol.sample_interior(&mut rand::rng()),
                 SpawnerVolumeMode::SampleBoundary => vol.sample_boundary(&mut rand::rng()),
-            };
+            } + transform.translation;
+
             commands.entity(entity).with_child((
                 Target,
                 Visibility::Visible,
