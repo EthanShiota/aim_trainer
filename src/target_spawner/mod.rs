@@ -2,12 +2,13 @@ use bevy::{
     asset::io::embedded::GetAssetServer, camera::visibility::RenderLayers,
     input::common_conditions::input_just_pressed, prelude::*,
 };
+use bevy_egui::prelude::*;
 mod components;
 mod target_material;
 pub use components::*;
 use target_material::TargetMaterial;
 
-use crate::AppState;
+use crate::{AppState, AudioBuffer, EditMode, GameState, SceneTimer};
 
 pub struct TargetPlugin;
 
@@ -53,6 +54,15 @@ impl Plugin for TargetPlugin {
                 Update,
                 (draw_spawners).run_if(resource_equals(DebugMode(true))),
             )
+            .add_systems(
+                Update,
+                tick_target_marker.run_if(in_state(GameState::Playing)),
+            )
+            .add_systems(Update, edit_mode.run_if(in_state(EditMode::Editing)))
+            .add_systems(
+                EguiPrimaryContextPass,
+                edit_mode_ui.run_if(in_state(EditMode::Editing)),
+            )
             .add_systems(Update, spawner_loop.run_if(in_state(SpawnerState::Active)))
             .world_mut()
             .register_component_hooks::<TargetSpawner>()
@@ -76,6 +86,56 @@ impl Plugin for TargetPlugin {
                 }
             });
     }
+}
+
+fn tick_target_marker(
+    mut commands: Commands,
+    q_markers: Query<(&TargetMarker, &Transform)>,
+    mut scene_timer: ResMut<SceneTimer>,
+    time: Res<Time<Real>>,
+    target: Res<TargetResource>,
+) {
+    scene_timer.tick(time.delta());
+
+    for (marker, transform) in q_markers.iter() {
+        if **marker <= scene_timer.elapsed() {
+            // spawn target
+            commands.spawn((
+                Mesh3d(target.mesh.clone()),
+                MeshMaterial3d(target.material.clone()),
+                transform.clone(),
+                Target,
+            ));
+        }
+    }
+}
+
+fn edit_mode() {}
+fn edit_mode_ui(
+    mut contexts: EguiContexts,
+    q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
+    mut stopwatch: ResMut<SceneTimer>,
+) -> Result {
+    egui::Window::new("edit").show(contexts.ctx_mut()?, |ui| {
+        if ui.button("Play/Pause").clicked() {
+            if let Ok(sink) = q_audio.single() {
+                sink.toggle_playback();
+            }
+            if stopwatch.is_paused() {
+                stopwatch.unpause();
+            } else {
+                stopwatch.pause();
+            }
+        }
+        if let Ok(sink) = q_audio.single() {
+            ui.label(format!(
+                "sink: {:?}\nstopwatch: {:?}",
+                sink.position(),
+                stopwatch.elapsed()
+            ));
+        }
+    });
+    Ok(())
 }
 
 fn setup_plugin(

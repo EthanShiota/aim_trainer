@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 use crate::target_spawner::TargetSpawner;
@@ -13,6 +15,10 @@ pub struct TargetDestroyed;
 
 #[derive(Message)]
 pub struct FireWeapon(pub Transform);
+
+#[derive(Component, DerefMut, Deref, PartialEq, PartialOrd)]
+// Marks when to spawn target
+pub struct TargetMarker(pub Duration);
 
 pub fn handle_fire_weapon(
     mut ray_cast: MeshRayCast,
@@ -32,9 +38,17 @@ pub fn handle_fire_weapon(
     }
 }
 
-pub fn destroy_hit_targets(mut targets: PopulatedMessageReader<TargetHit>, mut commands: Commands) {
+pub fn destroy_hit_targets(
+    mut targets: PopulatedMessageReader<TargetHit>,
+    mut commands: Commands,
+    asset_server: ResMut<AssetServer>,
+) {
     for TargetHit(entity) in targets.read() {
-        commands.entity(*entity).despawn();
+        commands
+            .entity(*entity)
+            .insert(AudioPlayer::new(asset_server.load("audio/boop.wav")));
+        commands.entity(*entity).remove::<Mesh3d>();
+        commands.delayed().secs(2.).entity(*entity).despawn();
         commands.trigger(TargetDestroyed);
     }
 }

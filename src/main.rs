@@ -8,6 +8,7 @@ use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
 use bevy::ecs::system::ObserverSystem;
 use bevy::log::LogPlugin;
+use bevy::time::Stopwatch;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
@@ -48,11 +49,15 @@ struct GameStats {
     time_left: Option<Duration>,
 }
 
+#[derive(Resource, PartialEq, Debug, Default, DerefMut, Deref)]
+pub struct SceneTimer(Stopwatch);
+
 fn main() {
     App::new()
         .insert_resource(DefaultOpaqueRendererMethod::deferred())
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(GlobalAmbientLight::NONE)
+        .insert_resource(SceneTimer::default())
         .insert_resource(PickingSettings {
             is_enabled: true,
             is_input_enabled: true,
@@ -91,6 +96,7 @@ fn main() {
         // INFO: State
         .insert_state(AppState::Menu)
         .add_sub_state::<GameState>()
+        .add_sub_state::<EditMode>()
         // INFO: Audio buffer for quick scrubbing
         .insert_resource(Assets::<AudioBuffer>::default())
         .add_audio_source::<AudioBuffer>()
@@ -151,6 +157,15 @@ enum GameState {
     Playing,
 }
 
+#[derive(SubStates, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
+#[source(AppState = AppState::InGame)]
+
+enum EditMode {
+    Editing,
+    #[default]
+    Normal,
+}
+
 #[derive(Component, Default, Clone)]
 struct ScoreUI;
 
@@ -176,8 +191,8 @@ fn main_menu() -> impl Scene {
                 menu_button("Play")
                 on(|e: On<Pointer<Press>>, mut commands: Commands| {
                     log::info!("press!");
-                    commands.spawn_scene(scenarios::basic());
                     commands.set_state(AppState::InGame);
+                    commands.run_system_cached(scenarios::basic);
                 })
             ),
             (
@@ -231,6 +246,7 @@ fn music_controls(
     mut contexts: EguiContexts,
     mut q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
     sources: Res<Assets<AudioBuffer>>,
+    mut should_resume: Local<bool>,
 ) -> Result {
     egui::Window::new("Controls").show(contexts.ctx_mut()?, |ui| {
         for (sink, audio_player) in q_sink.iter_mut() {
@@ -246,10 +262,14 @@ fn music_controls(
                     .try_seek(Duration::from_secs_f64(value))
                     .inspect_err(|err| println!("{err:?}"));
             }
-            if slider.dragged() {
+            if slider.drag_started() {
+                *should_resume = !sink.is_paused();
                 sink.pause();
-            } else {
-                sink.play();
+            }
+            if slider.drag_stopped() {
+                if *should_resume {
+                    sink.play();
+                }
             }
         }
     });
@@ -258,17 +278,24 @@ fn music_controls(
 
 fn playing(
     mut commands: Commands,
-    mut game_stats: If<ResMut<GameStats>>,
+    game_stats: Option<ResMut<GameStats>>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     time: Res<Time<Real>>,
+    q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
+    mut stopwatch: ResMut<SceneTimer>,
 ) {
-    if game_stats.time_left.is_some_and(|t| t.is_zero()) {
-        // destroy world
-        // TODO: More robust scenario handling and exit conditions
-        commands.set_state(AppState::Menu);
-        commands.spawn_scene(score_menu(**game_stats));
+    if let Ok(sink) = q_audio.single() {
+        stopwatch.set_elapsed(sink.position());
     }
-    game_stats.time_left = game_stats.time_left.map(|t| t.saturating_sub(time.delta()));
+    if let Some(mut game_stats) = game_stats {
+        if game_stats.time_left.is_some_and(|t| t.is_zero()) {
+            // destroy world
+            // TODO: More robust scenario handling and exit conditions
+            commands.set_state(AppState::Menu);
+            commands.spawn_scene(score_menu(*game_stats));
+        }
+        game_stats.time_left = game_stats.time_left.map(|t| t.saturating_sub(time.delta()));
+    }
 
     if mouse_input.just_pressed(MouseButton::Left) {
         commands.run_system_cached(fire_weapon);
