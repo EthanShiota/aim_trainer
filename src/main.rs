@@ -1,19 +1,21 @@
 mod fps_camera;
 mod materials;
 mod music;
+mod osu_parser;
 mod scenarios;
 mod target_spawner;
 
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
-use bevy::ecs::system::ObserverSystem;
 use bevy::log::LogPlugin;
 use bevy::time::Stopwatch;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use rfd::FileDialog;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
 use std::fs::File;
 use std::hash::Hash;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::Instrument;
 
@@ -36,12 +38,15 @@ use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::text::TextSection;
-use bevy::window::{PresentMode, PrimaryWindow, WindowMode, WindowRef, WindowResolution};
+use bevy::window::{
+    CursorGrabMode, CursorOptions, PresentMode, PrimaryWindow, WindowMode, WindowRef,
+    WindowResolution,
+};
 
 use target_spawner::FireWeapon;
 
-use crate::fps_camera::{FPSCamera, FPSCameraPlugin};
-use crate::target_spawner::TargetDestroyed;
+use crate::fps_camera::{FPSCamera, FPSCameraConfig, FPSCameraPlugin, GrabMouse};
+use crate::target_spawner::{BeatMap, Target, TargetDestroyed};
 
 #[derive(Resource, Default, Clone, Copy)]
 struct GameStats {
@@ -52,12 +57,16 @@ struct GameStats {
 #[derive(Resource, PartialEq, Debug, Default, DerefMut, Deref)]
 pub struct SceneTimer(Stopwatch);
 
+#[derive(Resource, Deref)]
+pub struct BeatMapPath(PathBuf);
+
 fn main() {
     App::new()
         .insert_resource(DefaultOpaqueRendererMethod::deferred())
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(GlobalAmbientLight::NONE)
         .insert_resource(SceneTimer::default())
+        .insert_resource(GrabMouse(true))
         .insert_resource(PickingSettings {
             is_enabled: true,
             is_input_enabled: true,
@@ -87,8 +96,7 @@ fn main() {
                     watch_for_changes_override: Some(true),
                     ..default()
                 }),
-            // FPSCameraPlugin,
-            FreeCameraPlugin,
+            FPSCameraPlugin,
             SkeinPlugin::default(),
             EguiPlugin::default(),
             WorldInspectorPlugin::new().run_if(resource_equals(target_spawner::DebugMode(true))),
@@ -110,6 +118,8 @@ fn main() {
         )
         // INFO: Setup main menu
         .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
+        .add_systems(OnEnter(GameState::Paused), pause_transition)
+        .add_systems(OnEnter(GameState::Playing), play_transition)
         .add_systems(
             Update,
             (
@@ -127,14 +137,10 @@ fn main() {
                 playing.run_if(in_state(GameState::Playing)),
             ),
         )
-        .add_systems(OnEnter(GameState::Paused), pause_menu.spawn())
         // INFO: Egui context systems
         .add_systems(
             EguiPrimaryContextPass,
-            (
-                music_controls,
-                debug_window.run_if(resource_equals(target_spawner::DebugMode(true))),
-            )
+            (debug_window.run_if(resource_equals(target_spawner::DebugMode(true))),)
                 .run_if(in_state(AppState::InGame)),
         )
         // INFO: Update score when target is destroyed
@@ -189,10 +195,11 @@ fn main_menu() -> impl Scene {
         Children [
             (
                 menu_button("Play")
-                on(|e: On<Pointer<Press>>, mut commands: Commands| {
-                    log::info!("press!");
+                on(|e: On<Pointer<Press>>, mut commands: Commands, path: Option<Res<BeatMapPath>>| {
+                    let f = FileDialog::default().set_directory("/").pick_file().unwrap();
+                    commands.insert_resource(BeatMapPath(f));
                     commands.set_state(AppState::InGame);
-                    commands.run_system_cached(scenarios::basic);
+                    commands.run_system_cached(scenarios::osu);
                 })
             ),
             (
@@ -247,6 +254,7 @@ fn music_controls(
     mut q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
     sources: Res<Assets<AudioBuffer>>,
     mut should_resume: Local<bool>,
+    mut stopwatch: ResMut<SceneTimer>,
 ) -> Result {
     egui::Window::new("Controls").show(contexts.ctx_mut()?, |ui| {
         for (sink, audio_player) in q_sink.iter_mut() {
@@ -261,6 +269,7 @@ fn music_controls(
                 _ = sink
                     .try_seek(Duration::from_secs_f64(value))
                     .inspect_err(|err| println!("{err:?}"));
+                stopwatch.set_elapsed(sink.position());
             }
             if slider.drag_started() {
                 *should_resume = !sink.is_paused();
@@ -283,10 +292,18 @@ fn playing(
     time: Res<Time<Real>>,
     q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     mut stopwatch: ResMut<SceneTimer>,
+    mut targets: Query<(Entity, &Target, &mut Transform)>,
 ) {
-    if let Ok(sink) = q_audio.single() {
-        stopwatch.set_elapsed(sink.position());
+    // Scale down targets overtime
+    for (ent, target, mut transform) in targets.iter_mut() {
+        transform.scale += -0.2 * time.delta_secs();
+        if transform.scale.x <= 0.0 {
+            commands.entity(ent).despawn();
+        }
     }
+    // if let Ok(sink) = q_audio.single() {
+    //     stopwatch.set_elapsed(sink.position());
+    // }
     if let Some(mut game_stats) = game_stats {
         if game_stats.time_left.is_some_and(|t| t.is_zero()) {
             // destroy world
@@ -314,15 +331,25 @@ fn game_loop(
     key_input: Res<ButtonInput<KeyCode>>,
     mut debug_mode: ResMut<target_spawner::DebugMode>,
     game_state: Res<State<GameState>>,
+    q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
 ) {
     let game_state = game_state.get();
+    for (sink, _) in q_sink {
+        if *game_state == GameState::Paused {
+            sink.pause();
+        } else {
+            sink.play();
+        }
+    }
 
     if key_input.just_pressed(KeyCode::Slash) {
         debug_mode.0 = !debug_mode.0;
     }
     if key_input.just_pressed(KeyCode::Escape) {
         match game_state {
-            GameState::Playing => commands.set_state(GameState::Paused),
+            GameState::Playing => {
+                commands.set_state(GameState::Paused);
+            }
             GameState::Paused => commands.set_state(GameState::Playing),
         }
     }
@@ -342,48 +369,49 @@ fn update_ui(stats: Option<Res<GameStats>>, text: Populated<&mut Text, With<Scor
     }
 }
 
-fn debug_window(mut contexts: EguiContexts, world_asset: Res<Assets<WorldAsset>>) -> Result {
+fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> Result {
     egui::Window::new("Debug Inspector").show(contexts.ctx_mut()?, |ui| {
-        let worlds = world_asset.iter();
-        for (_id, world) in worlds {
-            // World fold
-            egui::CollapsingHeader::new(world.reflect_short_type_path())
-                .id_salt(world.world.id())
+        if let Some(beat_map) = beat_map {
+            let mut songs = beat_map.hit_targets.clone();
+            songs.sort_by_key(|v| v.0.0);
+            egui::ScrollArea::new([false, true])
+                .max_height(400.)
                 .show(ui, |ui| {
-                    // Entity loop
-                    world.world.iter_entities().for_each(|ent| {
-                        // Entity component
-                        if let Ok(component) = world.world.inspect_entity(ent.id()) {
-                            // Component name
-                            let name = ent
-                                .get_components::<&Name>()
-                                .map(|n| n.to_string())
-                                .unwrap_or(ent.id().to_string());
-
-                            egui::CollapsingHeader::new(&name)
-                                .id_salt(ent.id())
-                                .show(ui, |ui| {
-                                    for info in component {
-                                        ui.label(info.name().to_string());
-                                    }
-                                });
-                        }
-                    });
+                    for (duration, transform) in songs {
+                        ui.label(format!(
+                            "time: {:?} position: {:?}",
+                            duration.0, transform.translation
+                        ));
+                    }
                 });
         }
     });
     Ok(())
 }
-
-fn pause_menu() -> impl Scene {
-    bsn! {
+fn play_transition(
+    mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
+    mut grab_mode: ResMut<GrabMouse>,
+) {
+    cursor_options.grab_mode = CursorGrabMode::Locked;
+    cursor_options.visible = false;
+    **grab_mode = true;
+}
+fn pause_transition(
+    mut commands: Commands,
+    mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
+    mut grab_mode: ResMut<GrabMouse>,
+) {
+    **grab_mode = false;
+    cursor_options.grab_mode = CursorGrabMode::None;
+    cursor_options.visible = true;
+    commands.spawn_scene(bsn! {
         Node {
             display: Display::Flex, justify_content: JustifyContent::Center, align_items: AlignItems::Center, width: percent(100.), height: percent(100.)
         }
         DespawnOnExit<_>(GameState::Paused)
         Children [
             Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
-            BackgroundColor(css::RED)
+            BorderColor::all(css::BLACK)
             Children [
                 Node {width: percent(100.), align_items: AlignItems::Center}
                 on(|_: On<Pointer<Press>>, mut commands: Commands| {
@@ -392,7 +420,7 @@ fn pause_menu() -> impl Scene {
                 Text::new("Exit")
             ]
         ]
-    }
+    });
 }
 
 fn score_ui() -> impl Scene {
@@ -532,7 +560,7 @@ fn light_and_cameras(
             Transform::from_xyz(0., 5., 0.),
             PlayerCamera,
             FPSCamera::default(),
-            FreeCamera::default(),
+            // FreeCamera::default(),
             AtmosphereSettings::default(),
             Exposure { ev100: 13.0 },
             Tonemapping::AcesFitted,

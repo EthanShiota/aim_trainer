@@ -1,14 +1,17 @@
+use std::time::Duration;
+
 use bevy::{
     asset::io::embedded::GetAssetServer, camera::visibility::RenderLayers,
-    input::common_conditions::input_just_pressed, prelude::*,
+    color::palettes::css::WHITE, input::common_conditions::input_just_pressed, prelude::*,
 };
 use bevy_egui::prelude::*;
 mod components;
 mod target_material;
 pub use components::*;
+use rand::make_rng;
 use target_material::TargetMaterial;
 
-use crate::{AppState, AudioBuffer, EditMode, GameState, SceneTimer};
+use crate::{AppState, AudioBuffer, EditMode, GameState, PlayerCamera, SceneTimer};
 
 pub struct TargetPlugin;
 
@@ -90,15 +93,26 @@ impl Plugin for TargetPlugin {
 
 fn tick_target_marker(
     mut commands: Commands,
-    q_markers: Query<(&TargetMarker, &Transform)>,
-    mut scene_timer: ResMut<SceneTimer>,
+    q_markers: Query<(
+        Entity,
+        &TargetMarker,
+        &Transform,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
+    q_sink: Single<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     time: Res<Time<Real>>,
     target: Res<TargetResource>,
 ) {
-    scene_timer.tick(time.delta());
+    let window = Duration::from_secs_f32(1.);
 
-    for (marker, transform) in q_markers.iter() {
-        if **marker <= scene_timer.elapsed() {
+    for (ent, marker, transform, mat) in q_markers.iter() {
+        let approach_marker = marker.saturating_sub(window);
+        if approach_marker <= q_sink.position() {
+            // show target marker
+            commands.entity(ent).insert(Visibility::Visible);
+        }
+        if **marker <= q_sink.position() {
+            log::info!("spawned {:?}", **marker);
             // spawn target
             commands.spawn((
                 Mesh3d(target.mesh.clone()),
@@ -106,25 +120,49 @@ fn tick_target_marker(
                 transform.clone(),
                 Target,
             ));
+            commands.entity(ent).despawn();
         }
     }
 }
 
-fn edit_mode() {}
+fn edit_mode(
+    mut commands: Commands,
+    stopwatch: Res<SceneTimer>,
+    player_camera: Single<&Transform, With<PlayerCamera>>,
+    button_input: Res<ButtonInput<KeyCode>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let mesh = meshes.add(Sphere::new(1.));
+    let mat = materials.add(StandardMaterial::from_color(WHITE));
+    if button_input.just_pressed(KeyCode::KeyV) {
+        let pos = player_camera
+            .with_translation(player_camera.translation + *player_camera.forward() * 40.);
+        commands.spawn((
+            TargetMarker(stopwatch.elapsed()),
+            pos,
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(mat.clone()),
+        ));
+    }
+}
 fn edit_mode_ui(
     mut contexts: EguiContexts,
     q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     mut stopwatch: ResMut<SceneTimer>,
+    mut beat_map: ResMut<BeatMap>,
+    mut commands: Commands,
+    targets: Query<(&TargetMarker, &Transform)>,
+    spawned_targets: Query<(Entity, &Target)>,
+    key: Res<ButtonInput<KeyCode>>,
 ) -> Result {
     egui::Window::new("edit").show(contexts.ctx_mut()?, |ui| {
-        if ui.button("Play/Pause").clicked() {
-            if let Ok(sink) = q_audio.single() {
-                sink.toggle_playback();
-            }
-            if stopwatch.is_paused() {
-                stopwatch.unpause();
-            } else {
-                stopwatch.pause();
+        if ui.button("save").clicked() {
+            beat_map.save(targets);
+        }
+        if ui.button("reset").clicked() {
+            for (ent, _) in spawned_targets {
+                commands.entity(ent).despawn();
             }
         }
         if let Ok(sink) = q_audio.single() {
@@ -144,7 +182,7 @@ fn setup_plugin(
     mut materials: ResMut<Assets<TargetMaterial>>,
 ) {
     commands.insert_resource(TargetResource {
-        mesh: meshes.add(Sphere::new(1.)),
+        mesh: meshes.add(Sphere::new(2.)),
         material: materials.add(TargetMaterial {
             color: LinearRgba::RED * 10.,
         }),

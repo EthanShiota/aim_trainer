@@ -12,10 +12,9 @@ bevy = { version = "0.19.0-rc.3", features = [
   "bevy_mikktspace",
   "dynamic_linking",
   "bevy_dev_tools",
-  "shader_format_wesl",
-  "detailed_trace",
   "bevy_ui",
 ] }
+rfd = "0.17.2"
 bevy_egui = "0.40.0-rc.1"
 bevy_skein = "0.6.0-rc.1"
 bevy-inspector-egui = { git = "https://github.com/taboky-dev/bevy-inspector-egui", rev = "873c32b" }

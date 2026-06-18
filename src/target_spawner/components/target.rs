@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{color::palettes::css::WHITE, prelude::*};
 
-use crate::target_spawner::TargetSpawner;
+use crate::{AudioBuffer, target_spawner::TargetSpawner};
 // Marker component for targets
-#[derive(Component)]
+#[derive(Component, Copy, Clone)]
 pub struct Target;
 
 #[derive(Message)]
@@ -16,9 +16,48 @@ pub struct TargetDestroyed;
 #[derive(Message)]
 pub struct FireWeapon(pub Transform);
 
-#[derive(Component, DerefMut, Deref, PartialEq, PartialOrd)]
+#[derive(Component, DerefMut, Deref, PartialEq, PartialOrd, Clone)]
 // Marks when to spawn target
 pub struct TargetMarker(pub Duration);
+
+#[derive(Resource)]
+pub struct BeatMap {
+    pub song: Handle<AudioBuffer>,
+    pub hit_targets: Vec<(TargetMarker, Transform)>,
+}
+
+impl BeatMap {
+    pub fn spawn(
+        &self,
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut materials: ResMut<Assets<StandardMaterial>>,
+    ) {
+        commands.spawn(AudioPlayer(self.song.clone()));
+        let mesh = meshes.add(Sphere::new(1.));
+        let mat = materials.add(StandardMaterial::from_color(WHITE));
+        for (target, transform) in self.hit_targets.iter().cloned() {
+            commands.spawn((
+                target,
+                transform,
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(mat.clone()),
+                Visibility::Hidden,
+            ));
+        }
+    }
+
+    pub fn save(&mut self, targets: Query<(&TargetMarker, &Transform)>) {
+        if targets.is_empty() {
+            log::warn!("empty save!");
+            return;
+        }
+        self.hit_targets = targets
+            .iter()
+            .map(|(a, b)| (a.clone(), b.clone()))
+            .collect();
+    }
+}
 
 pub fn handle_fire_weapon(
     mut ray_cast: MeshRayCast,
@@ -32,7 +71,7 @@ pub fn handle_fire_weapon(
         let settings = MeshRayCastSettings::default().with_filter(&filter);
         let hits = ray_cast.cast_ray(ray, &settings);
 
-        for (entity, _ray_mesh_hit) in hits {
+        for (entity, _ray_mesh_hit) in hits.iter().take(1) {
             target_hit.write(TargetHit(*entity));
         }
     }
@@ -44,11 +83,18 @@ pub fn destroy_hit_targets(
     asset_server: ResMut<AssetServer>,
 ) {
     for TargetHit(entity) in targets.read() {
+        commands.entity(*entity).remove::<Mesh3d>();
         commands
             .entity(*entity)
-            .insert(AudioPlayer::new(asset_server.load("audio/boop.wav")));
-        commands.entity(*entity).remove::<Mesh3d>();
-        commands.delayed().secs(2.).entity(*entity).despawn();
+            .insert(AudioPlayer::new(asset_server.load("audio/Creams.ogg")));
+        _ = commands
+            .delayed()
+            .secs(2.)
+            .get_entity(*entity)
+            .and_then(|mut e| {
+                e.despawn();
+                Ok(())
+            });
         commands.trigger(TargetDestroyed);
     }
 }
