@@ -82,9 +82,9 @@ pub fn osu(
         .hit_objects
         .iter()
         .filter_map(|hit_obj| {
-            if hit_obj.type_bitmask & 1 == 1 {
-                return None;
-            }
+            // if hit_obj.type_bitmask & 1 == 1 {
+            //     return None;
+            // }
             let (max_x, max_y) = (512f32, 384f32);
             let x = (hit_obj.x as f32 / max_x) * width - width / 2.;
             let y = (1. - (hit_obj.y as f32 / max_y)) * height - height / 2.;
