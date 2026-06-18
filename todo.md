@@ -10,3 +10,7 @@
 ## Visuals
 - Hit Leadup
 - Highlight next target
+
+## Setings
+- Sensitivity
+- Volume
