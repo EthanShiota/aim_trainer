@@ -18,12 +18,12 @@ pub fn tick_target_marker(
         &MeshMaterial3d<StandardMaterial>,
     )>,
     q_sink: Single<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
-    time: Res<Time<Real>>,
+    _time: Res<Time<Real>>,
     target: Res<TargetResource>,
 ) {
     let window = Duration::from_secs_f32(1.);
 
-    for (ent, marker, transform, mat) in q_markers.iter() {
+    for (ent, marker, transform, _mat) in q_markers.iter() {
         let approach_marker = marker.saturating_sub(window);
         if approach_marker <= q_sink.position() {
             // show target marker

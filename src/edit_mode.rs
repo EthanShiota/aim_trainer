@@ -40,7 +40,7 @@ fn edit_mode(
 }
 fn edit_mode_ui(
     mut contexts: EguiContexts,
-    q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
+    _q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     mut beat_map: ResMut<BeatMap>,
     mut commands: Commands,
     targets: Query<(&TargetMarker, &Transform)>,

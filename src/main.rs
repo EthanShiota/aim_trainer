@@ -7,29 +7,24 @@ mod target_plugin;
 
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
-use bevy::log::LogPlugin;
 use bevy::time::Stopwatch;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rfd::FileDialog;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
-use std::fs::File;
 use std::hash::Hash;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
-use tracing::Instrument;
 
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{Exposure, RenderTarget};
-use bevy::camera_controller::free_camera::{FreeCamera, FreeCameraPlugin};
 use bevy::color::palettes::css;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
 use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricLight};
 use bevy::picking::PickingSettings;
-use bevy::reflect::DynamicTypePath;
 use bevy_egui::prelude::*;
 use bevy_skein::SkeinPlugin;
 
@@ -39,13 +34,12 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::text::TextSection;
 use bevy::window::{
-    CursorGrabMode, CursorOptions, PresentMode, PrimaryWindow, WindowMode, WindowRef,
-    WindowResolution,
+    CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode,
 };
 
 use target_plugin::FireWeapon;
 
-use crate::fps_camera::{FPSCamera, FPSCameraConfig, FPSCameraPlugin, GrabMouse};
+use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 use crate::target_plugin::{BeatMap, Target, TargetDestroyed};
 
 #[derive(Resource, Default, Clone, Copy)]
@@ -196,7 +190,7 @@ fn main_menu() -> impl Scene {
         Children [
             (
                 menu_button("Play")
-                on(|e: On<Pointer<Press>>, mut commands: Commands, path: Option<Res<BeatMapPath>>| {
+                on(|_e: On<Pointer<Press>>, mut commands: Commands, _path: Option<Res<BeatMapPath>>| {
                     let f = FileDialog::default().set_directory("/").pick_file().unwrap();
                     commands.insert_resource(BeatMapPath(f));
                     commands.set_state(AppState::InGame);
@@ -291,12 +285,12 @@ fn playing(
     game_stats: Option<ResMut<GameStats>>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     time: Res<Time<Real>>,
-    q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
-    mut stopwatch: ResMut<SceneTimer>,
+    _q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
+    _stopwatch: ResMut<SceneTimer>,
     mut targets: Query<(Entity, &Target, &mut Transform)>,
 ) {
     // Scale down targets overtime
-    for (ent, target, mut transform) in targets.iter_mut() {
+    for (ent, _target, mut transform) in targets.iter_mut() {
         transform.scale += -0.2 * time.delta_secs();
         if transform.scale.x <= 0.0 {
             commands.entity(ent).despawn();

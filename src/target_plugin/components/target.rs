@@ -1,8 +1,6 @@
-use std::time::Duration;
 
-use bevy::{color::palettes::css::WHITE, prelude::*};
+use bevy::prelude::*;
 
-use crate::{AudioBuffer, target_plugin::TargetSpawner};
 // Marker component for targets
 #[derive(Component, Copy, Clone)]
 pub struct Target;

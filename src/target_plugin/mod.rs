@@ -1,10 +1,7 @@
-use std::time::Duration;
 
 use bevy::{
-    asset::io::embedded::GetAssetServer, camera::visibility::RenderLayers,
-    color::palettes::css::WHITE, input::common_conditions::input_just_pressed, prelude::*,
+    camera::visibility::RenderLayers, input::common_conditions::input_just_pressed, prelude::*,
 };
-use bevy_egui::prelude::*;
 mod components;
 mod target_material;
 pub use components::*;
@@ -19,7 +16,7 @@ pub struct TargetResource {
     pub material: Handle<TargetMaterial>,
 }
 
-use crate::{AppState, AudioBuffer, EditMode, GameState, PlayerCamera, SceneTimer};
+use crate::{AppState, GameState};
 
 pub struct TargetPlugin;
 

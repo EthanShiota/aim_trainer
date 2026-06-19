@@ -3,10 +3,9 @@ use rodio::Source;
 use std::{fs::File, path::Path, time::Duration};
 
 use crate::{
-    AudioBuffer, BeatMapPath, EditMode, GameState, GameStats, SceneTimer,
-    materials::ground_material,
+    AudioBuffer, BeatMapPath, EditMode, GameStats, SceneTimer,
     osu_parser,
-    target_plugin::{BeatMap, SpawnerState, SpawnerVolume, TargetMarker, TargetSpawner},
+    target_plugin::{BeatMap, TargetMarker},
 };
 
 pub fn basic(
