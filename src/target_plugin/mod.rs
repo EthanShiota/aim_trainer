@@ -8,8 +8,16 @@ use bevy_egui::prelude::*;
 mod components;
 mod target_material;
 pub use components::*;
-use rand::make_rng;
 use target_material::TargetMaterial;
+
+#[derive(Resource, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct DebugMode(pub bool);
+
+#[derive(Resource)]
+pub struct TargetResource {
+    pub mesh: Handle<Mesh>,
+    pub material: Handle<TargetMaterial>,
+}
 
 use crate::{AppState, AudioBuffer, EditMode, GameState, PlayerCamera, SceneTimer};
 
@@ -61,11 +69,6 @@ impl Plugin for TargetPlugin {
                 Update,
                 tick_target_marker.run_if(in_state(GameState::Playing)),
             )
-            .add_systems(Update, edit_mode.run_if(in_state(EditMode::Editing)))
-            .add_systems(
-                EguiPrimaryContextPass,
-                edit_mode_ui.run_if(in_state(EditMode::Editing)),
-            )
             .add_systems(Update, spawner_loop.run_if(in_state(SpawnerState::Active)))
             .world_mut()
             .register_component_hooks::<TargetSpawner>()
@@ -89,91 +92,6 @@ impl Plugin for TargetPlugin {
                 }
             });
     }
-}
-
-fn tick_target_marker(
-    mut commands: Commands,
-    q_markers: Query<(
-        Entity,
-        &TargetMarker,
-        &Transform,
-        &MeshMaterial3d<StandardMaterial>,
-    )>,
-    q_sink: Single<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
-    time: Res<Time<Real>>,
-    target: Res<TargetResource>,
-) {
-    let window = Duration::from_secs_f32(1.);
-
-    for (ent, marker, transform, mat) in q_markers.iter() {
-        let approach_marker = marker.saturating_sub(window);
-        if approach_marker <= q_sink.position() {
-            // show target marker
-            commands.entity(ent).insert(Visibility::Visible);
-        }
-        if **marker <= q_sink.position() {
-            log::info!("spawned {:?}", **marker);
-            // spawn target
-            commands.spawn((
-                Mesh3d(target.mesh.clone()),
-                MeshMaterial3d(target.material.clone()),
-                transform.clone(),
-                Target,
-            ));
-            commands.entity(ent).despawn();
-        }
-    }
-}
-
-fn edit_mode(
-    mut commands: Commands,
-    stopwatch: Res<SceneTimer>,
-    player_camera: Single<&Transform, With<PlayerCamera>>,
-    button_input: Res<ButtonInput<KeyCode>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mesh = meshes.add(Sphere::new(1.));
-    let mat = materials.add(StandardMaterial::from_color(WHITE));
-    if button_input.just_pressed(KeyCode::KeyV) {
-        let pos = player_camera
-            .with_translation(player_camera.translation + *player_camera.forward() * 40.);
-        commands.spawn((
-            TargetMarker(stopwatch.elapsed()),
-            pos,
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(mat.clone()),
-        ));
-    }
-}
-fn edit_mode_ui(
-    mut contexts: EguiContexts,
-    q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
-    mut stopwatch: ResMut<SceneTimer>,
-    mut beat_map: ResMut<BeatMap>,
-    mut commands: Commands,
-    targets: Query<(&TargetMarker, &Transform)>,
-    spawned_targets: Query<(Entity, &Target)>,
-    key: Res<ButtonInput<KeyCode>>,
-) -> Result {
-    egui::Window::new("edit").show(contexts.ctx_mut()?, |ui| {
-        if ui.button("save").clicked() {
-            beat_map.save(targets);
-        }
-        if ui.button("reset").clicked() {
-            for (ent, _) in spawned_targets {
-                commands.entity(ent).despawn();
-            }
-        }
-        if let Ok(sink) = q_audio.single() {
-            ui.label(format!(
-                "sink: {:?}\nstopwatch: {:?}",
-                sink.position(),
-                stopwatch.elapsed()
-            ));
-        }
-    });
-    Ok(())
 }
 
 fn setup_plugin(

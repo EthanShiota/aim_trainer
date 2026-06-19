@@ -1,3 +1,4 @@
+use crate::target_plugin::TargetResource;
 use std::time::Duration;
 
 use bevy::prelude::*;

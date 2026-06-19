@@ -1,9 +1,9 @@
+mod edit_mode;
 mod fps_camera;
 mod materials;
-mod music;
 mod osu_parser;
 mod scenarios;
-mod target_spawner;
+mod target_plugin;
 
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
@@ -43,10 +43,10 @@ use bevy::window::{
     WindowResolution,
 };
 
-use target_spawner::FireWeapon;
+use target_plugin::FireWeapon;
 
 use crate::fps_camera::{FPSCamera, FPSCameraConfig, FPSCameraPlugin, GrabMouse};
-use crate::target_spawner::{BeatMap, Target, TargetDestroyed};
+use crate::target_plugin::{BeatMap, Target, TargetDestroyed};
 
 #[derive(Resource, Default, Clone, Copy)]
 struct GameStats {
@@ -99,7 +99,8 @@ fn main() {
             FPSCameraPlugin,
             SkeinPlugin::default(),
             EguiPlugin::default(),
-            WorldInspectorPlugin::new().run_if(resource_equals(target_spawner::DebugMode(true))),
+            edit_mode::EditPlugin,
+            WorldInspectorPlugin::new().run_if(resource_equals(target_plugin::DebugMode(true))),
         ))
         // INFO: State
         .insert_state(AppState::Menu)
@@ -109,7 +110,7 @@ fn main() {
         .insert_resource(Assets::<AudioBuffer>::default())
         .add_audio_source::<AudioBuffer>()
         // INFO: Target plugin
-        .add_plugins(target_spawner::TargetPlugin)
+        .add_plugins(target_plugin::TargetPlugin)
         // INFO: Setup world when entering game
         // lights + camera + ui
         .add_systems(
@@ -140,7 +141,7 @@ fn main() {
         // INFO: Egui context systems
         .add_systems(
             EguiPrimaryContextPass,
-            (debug_window.run_if(resource_equals(target_spawner::DebugMode(true))),)
+            (debug_window.run_if(resource_equals(target_plugin::DebugMode(true))),)
                 .run_if(in_state(AppState::InGame)),
         )
         // INFO: Update score when target is destroyed
@@ -329,7 +330,7 @@ fn global_bindings(key_input: Res<ButtonInput<KeyCode>>, mut commands: Commands)
 fn game_loop(
     mut commands: Commands,
     key_input: Res<ButtonInput<KeyCode>>,
-    mut debug_mode: ResMut<target_spawner::DebugMode>,
+    mut debug_mode: ResMut<target_plugin::DebugMode>,
     game_state: Res<State<GameState>>,
     q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
 ) {

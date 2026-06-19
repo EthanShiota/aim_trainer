@@ -6,7 +6,7 @@ use crate::{
     AudioBuffer, BeatMapPath, EditMode, GameState, GameStats, SceneTimer,
     materials::ground_material,
     osu_parser,
-    target_spawner::{BeatMap, SpawnerState, SpawnerVolume, TargetMarker, TargetSpawner},
+    target_plugin::{BeatMap, SpawnerState, SpawnerVolume, TargetMarker, TargetSpawner},
 };
 
 pub fn basic(
