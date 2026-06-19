@@ -4,7 +4,7 @@ use std::{fs::File, path::Path, time::Duration};
 
 use crate::{
     AudioBuffer, BeatMapPath, EditMode, GameStats, SceneTimer,
-    osu_parser,
+    osu_parser::{self, BeatMapOsu},
     target_plugin::{BeatMap, TargetMarker},
 };
 
@@ -43,17 +43,19 @@ pub fn basic(
 }
 
 pub fn osu(
+    In(osu_beat_map): In<BeatMapOsu>,
     mut commands: Commands,
     mut audio: ResMut<Assets<AudioBuffer>>,
-    beat_map_path: Res<BeatMapPath>,
+    // beat_map_path: Res<BeatMapPath>,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
     mut stopwatch: ResMut<SceneTimer>,
 ) {
-    let f = File::open(&beat_map_path.0).unwrap();
-    let osu_beat_map = osu_parser::BeatMapOsu::new(f).unwrap();
+    // let f = File::open(&beat_map_path.0).unwrap();
+    // let osu_beat_map = osu_parser::BeatMapOsu::new(f).unwrap();
 
-    let audio_file = beat_map_path
+    let audio_file = osu_beat_map
+        .beat_map_path
         .parent()
         .unwrap()
         .join(Path::new(&osu_beat_map.general.audio_filename));

@@ -1,5 +1,6 @@
-use std::{collections::HashMap, error::Error, fs::File, io::Read, str::FromStr};
+use std::{collections::HashMap, error::Error, fs::File, io::Read, path::PathBuf, str::FromStr};
 
+#[derive(Clone)]
 pub struct HitObject {
     pub x: usize,
     pub y: usize,
@@ -29,19 +30,28 @@ impl FromStr for HitObject {
     }
 }
 
+#[derive(Clone)]
 pub struct General {
     pub audio_filename: String,
     pub audio_lead_in: usize,
 }
+
+#[derive(Clone)]
+pub struct Metadata {
+    pub title: String,
+    pub version: String,
+}
+#[derive(Clone)]
 pub struct BeatMapOsu {
+    pub beat_map_path: PathBuf,
     pub general: General,
+    pub metadata: Metadata,
     pub hit_objects: Vec<HitObject>,
 }
 
 impl BeatMapOsu {
-    pub fn new(mut value: File) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut s = String::new();
-        value.read_to_string(&mut s)?;
+    pub fn new(mut value: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        let s = std::fs::read_to_string(value.clone())?;
 
         let lines_iter = s.lines();
 
@@ -49,17 +59,27 @@ impl BeatMapOsu {
         let mut sections_iter = sections
             .split(|line| line.starts_with('[') && line.ends_with(']'))
             .skip(1);
-        let general = sections_iter.next().unwrap();
-        let hitobj = sections_iter.skip(6).next().unwrap();
+        let general = sections_iter.next().ok_or("general missing")?;
+        let metadata = sections_iter.nth(1).ok_or("metadata missing")?;
+        let hitobj = sections_iter.nth(4).ok_or("HitObj missing")?;
 
-        let dict_gen = general
+        let general = general
+            .iter()
+            .filter_map(|s| s.split_once(':').map(|(k, v)| (k, v.trim())))
+            .collect::<HashMap<&str, &str>>();
+        let metadata = metadata
             .iter()
             .filter_map(|s| s.split_once(':').map(|(k, v)| (k, v.trim())))
             .collect::<HashMap<&str, &str>>();
         Ok(BeatMapOsu {
+            beat_map_path: value,
             general: General {
-                audio_filename: dict_gen["AudioFilename"].to_string(),
-                audio_lead_in: dict_gen["AudioLeadIn"].parse().unwrap(),
+                audio_filename: general["AudioFilename"].to_string(),
+                audio_lead_in: general["AudioLeadIn"].parse().unwrap(),
+            },
+            metadata: Metadata {
+                title: metadata["Title"].to_string(),
+                version: metadata["Version"].to_string(),
             },
             hit_objects: hitobj.iter().map(|&s| s.parse().unwrap()).collect(),
         })
@@ -68,7 +88,8 @@ impl BeatMapOsu {
 
 #[test]
 fn parser_test() {
-    BeatMapOsu::new(File::open(
-        "osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu",
-    ).unwrap());
+    BeatMapOsu::new(
+        "osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu"
+            .into(),
+    );
 }

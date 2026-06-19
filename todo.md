@@ -1,6 +1,7 @@
 # TODO
 
 ## Gameplay
+
 - Sliders
 - Proper map select
 - Return to menu
@@ -8,9 +9,11 @@
 
 
 ## Visuals
+
 - Hit Leadup
 - Highlight next target
 
-## Setings
+## Settings
+
 - Sensitivity
 - Volume

@@ -1,6 +1,7 @@
 mod edit_mode;
 mod fps_camera;
 mod materials;
+mod menus;
 mod osu_parser;
 mod scenarios;
 mod target_plugin;
@@ -17,8 +18,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::anti_alias::taa::TemporalAntiAliasing;
+use bevy::camera::Exposure;
 use bevy::camera::visibility::RenderLayers;
-use bevy::camera::{Exposure, RenderTarget};
 use bevy::color::palettes::css;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::atmosphere::ScatteringMedium;
@@ -31,11 +32,8 @@ use bevy_skein::SkeinPlugin;
 use bevy::pbr::{AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
-use bevy::render::render_resource::TextureFormat;
 use bevy::text::TextSection;
-use bevy::window::{
-    CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode,
-};
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
 use target_plugin::FireWeapon;
 
@@ -94,6 +92,7 @@ fn main() {
             SkeinPlugin::default(),
             EguiPlugin::default(),
             edit_mode::EditPlugin,
+            menus::MenuPlugin,
             WorldInspectorPlugin::new().run_if(resource_equals(target_plugin::DebugMode(true))),
         ))
         // INFO: State
@@ -112,7 +111,7 @@ fn main() {
             (light_and_cameras, setup_ui).chain(),
         )
         // INFO: Setup main menu
-        .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
+        // .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
         .add_systems(OnEnter(GameState::Paused), pause_transition)
         .add_systems(OnEnter(GameState::Playing), play_transition)
         .add_systems(
@@ -191,10 +190,10 @@ fn main_menu() -> impl Scene {
             (
                 menu_button("Play")
                 on(|_e: On<Pointer<Press>>, mut commands: Commands, _path: Option<Res<BeatMapPath>>| {
-                    let f = FileDialog::default().set_directory("/").pick_file().unwrap();
-                    commands.insert_resource(BeatMapPath(f));
-                    commands.set_state(AppState::InGame);
-                    commands.run_system_cached(scenarios::osu);
+                    // let f = FileDialog::default().set_directory("/").pick_file().unwrap();
+                    // commands.insert_resource(BeatMapPath(f));
+                    // commands.set_state(AppState::InGame);
+                    // commands.run_system_cached(scenarios::osu);
                 })
             ),
             (
@@ -436,9 +435,7 @@ fn setup_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut meterials: ResMut<Assets<ColorMaterial>>,
-    mut egui_settings: ResMut<EguiGlobalSettings>,
 ) -> Result {
-    egui_settings.auto_create_primary_context = false;
     // Spawn crosshair
     commands.spawn((
         Mesh2d(meshes.add(Circle::new(3.))),
@@ -462,68 +459,8 @@ impl Decodable for AudioBuffer {
 
 fn light_and_cameras(
     mut commands: Commands,
-    // mut meshes: ResMut<Assets<Mesh>>,
-    // mut materials: ResMut<Assets<StandardMaterial>>,
-    mut render_image: ResMut<Assets<Image>>,
     mut scattering_mediums: ResMut<Assets<ScatteringMedium>>,
-    // mut audio: ResMut<Assets<AudioBuffer>>,
-    window: Single<&Window, With<PrimaryWindow>>,
-    // asset_server: Res<AssetServer>,
 ) {
-    // let gltf = WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("Scene.glb")));
-    // log::info!("{:?}", gltf);
-    // let _root = commands.spawn(gltf);
-    //
-    // let audio_file = File::open("samples/Ian Asher & Phantogram- Black Out Days.wav").unwrap();
-    // let decoder = rodio::decoder::Decoder::try_from(audio_file).unwrap();
-    //
-    // let audio_buffer = rodio::buffer::SamplesBuffer::new(
-    //     decoder.channels(),
-    //     decoder.sample_rate(),
-    //     decoder.collect::<Vec<_>>(),
-    // );
-    // log::info!("audio buffer size: {}", audio_buffer.len());
-    //
-    // commands.spawn((
-    //     AudioPlayer(audio.add(AudioBuffer(audio_buffer))),
-    //     PlaybackSettings {
-    //         volume: bevy::audio::Volume::Linear(0.5),
-    //         spatial: false,
-    //         ..default()
-    //     },
-    // ));
-
-    // std::thread::spawn(|| {
-    //     let stream = testing();
-    //     Box::leak(Box::new(stream));
-    // });
-
-    // commands.spawn((
-    //     target_spawner::TargetSpawner(Timer::new(
-    //         std::time::Duration::from_millis(100),
-    //         TimerMode::Repeating,
-    //     )),
-    //     target_spawner::SpawnerVolumeMode::SampleBoundary,
-    //     target_spawner::SpawnerVolume::from(Sphere::new(100.)),
-    //     Transform::from_xyz(20., 10., 0.),
-    // ));
-
-    // commands.spawn((
-    //     Mesh3d(
-    //         meshes.add(
-    //             Circle::new(100.)
-    //                 .mesh()
-    //                 .resolution(40)
-    //                 .build()
-    //                 .with_generated_tangents()
-    //                 .unwrap(),
-    //         ),
-    //     ),
-    //     MeshMaterial3d(materials.add(ground_material(asset_server))),
-    //     Transform::from_xyz(0., 0., 0.)
-    //         .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-    // ));
-
     commands.spawn((
         DirectionalLight {
             shadow_maps_enabled: true,
@@ -545,7 +482,6 @@ fn light_and_cameras(
 
     commands.spawn((
         Camera3d::default(),
-        PrimaryEguiContext,
         RenderLayers::from_layers(&[0, 1]),
         Camera {
             is_active: true,
@@ -555,7 +491,6 @@ fn light_and_cameras(
             Transform::from_xyz(0., 5., 0.),
             PlayerCamera,
             FPSCamera::default(),
-            // FreeCamera::default(),
             AtmosphereSettings::default(),
             Exposure { ev100: 13.0 },
             Tonemapping::AcesFitted,
@@ -571,39 +506,16 @@ fn light_and_cameras(
         ),
     ));
 
-    let cam = commands
-        .spawn((
-            Name::new("UI Camera"),
-            AtmosphereSettings::default(),
-            Camera2d,
-            RenderTarget::Image(
-                render_image
-                    .add(Image::new_target_texture(
-                        window.physical_width(),
-                        window.physical_height(),
-                        TextureFormat::Rgba8UnormSrgb,
-                        None,
-                    ))
-                    .into(),
-            ),
-            Camera {
-                order: 1,
-                is_active: true,
-                clear_color: ClearColorConfig::Custom(css::PINK.with_alpha(0.).into()),
-                ..default()
-            },
-        ))
-        .id();
-    // 2d overlay camera
     commands.spawn((
-        Node {
-            width: Val::Percent(100.),
-            height: Val::Percent(100.),
-            align_content: AlignContent::Center,
-            justify_content: JustifyContent::Center,
+        Name::new("UI Camera"),
+        AtmosphereSettings::default(),
+        Camera2d,
+        Camera {
+            order: 1,
+            is_active: true,
+            clear_color: ClearColorConfig::None,
             ..default()
         },
-        ViewportNode::new(cam),
     ));
 }
 
