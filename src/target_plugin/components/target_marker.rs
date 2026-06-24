@@ -25,11 +25,13 @@ pub fn tick_target_marker(
 
     for (ent, marker, transform, _mat) in q_markers.iter() {
         let approach_marker = marker.saturating_sub(window);
-        if approach_marker <= q_sink.position() {
+        let current_time = q_sink.position();
+
+        if approach_marker <= current_time {
             // show target marker
             commands.entity(ent).insert(Visibility::Visible);
         }
-        if **marker <= q_sink.position() {
+        if **marker <= current_time {
             log::info!("spawned {:?}", **marker);
             // spawn target
             commands.spawn((

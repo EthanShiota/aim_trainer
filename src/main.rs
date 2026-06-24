@@ -14,17 +14,18 @@ use rfd::FileDialog;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
+use std::os::windows::raw::SOCKET;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::Exposure;
 use bevy::camera::visibility::RenderLayers;
-use bevy::color::palettes::css;
+use bevy::color::palettes::css::{self, WHITE};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
-use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricLight};
+use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, Skybox, VolumetricLight};
 use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
 use bevy_skein::SkeinPlugin;
@@ -54,9 +55,6 @@ pub struct BeatMapPath(PathBuf);
 
 fn main() {
     App::new()
-        .insert_resource(DefaultOpaqueRendererMethod::deferred())
-        .insert_resource(ClearColor(Color::BLACK))
-        .insert_resource(GlobalAmbientLight::NONE)
         .insert_resource(SceneTimer::default())
         .insert_resource(GrabMouse(true))
         .insert_resource(PickingSettings {
@@ -169,12 +167,12 @@ enum EditMode {
 #[derive(Component, Default, Clone)]
 struct ScoreUI;
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct PlayerCamera;
 
 fn main_menu() -> impl Scene {
     bsn! {
-        DespawnOnExit::<_>(AppState::Menu)
+        DespawnOnExit::<AppState>(AppState::Menu)
         Camera2d
         Node {
             width: percent(100.),
@@ -402,7 +400,7 @@ fn pause_transition(
         Node {
             display: Display::Flex, justify_content: JustifyContent::Center, align_items: AlignItems::Center, width: percent(100.), height: percent(100.)
         }
-        DespawnOnExit<_>(GameState::Paused)
+        DespawnOnExit::<GameState>(GameState::Paused)
         Children [
             Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
             BorderColor::all(css::BLACK)
@@ -460,25 +458,27 @@ impl Decodable for AudioBuffer {
 fn light_and_cameras(
     mut commands: Commands,
     mut scattering_mediums: ResMut<Assets<ScatteringMedium>>,
+    mut images: ResMut<Assets<Image>>,
+    asset_server: ResMut<AssetServer>,
 ) {
-    commands.spawn((
-        DirectionalLight {
-            shadow_maps_enabled: true,
-            // lux::RAW_SUNLIGHT is recommended for use with this feature, since
-            // other values approximate sunlight *post-scattering* in various
-            // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
-            // sun unfiltered by the atmosphere, so it is the proper input for
-            // sunlight to be filtered by the atmosphere.
-            illuminance: lux::RAW_SUNLIGHT,
-            ..default()
-        },
-        Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
-        VolumetricLight,
-    ));
+    // commands.spawn((
+    //     DirectionalLight {
+    //         shadow_maps_enabled: true,
+    //         // lux::RAW_SUNLIGHT is recommended for use with this feature, since
+    //         // other values approximate sunlight *post-scattering* in various
+    //         // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
+    //         // sun unfiltered by the atmosphere, so it is the proper input for
+    //         // sunlight to be filtered by the atmosphere.
+    //         illuminance: lux::RAW_SUNLIGHT,
+    //         ..default()
+    //     },
+    //     Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+    //     VolumetricLight,
+    // ));
 
-    commands.spawn(Atmosphere::earth(
-        scattering_mediums.add(ScatteringMedium::earth(256, 256)),
-    ));
+    // commands.spawn(Atmosphere::earth(
+    //     scattering_mediums.add(ScatteringMedium::earth(256, 256)),
+    // ));
 
     commands.spawn((
         Camera3d::default(),
@@ -487,28 +487,46 @@ fn light_and_cameras(
             is_active: true,
             ..default()
         },
-        (
-            Transform::from_xyz(0., 5., 0.),
-            PlayerCamera,
-            FPSCamera::default(),
-            AtmosphereSettings::default(),
-            Exposure { ev100: 13.0 },
-            Tonemapping::AcesFitted,
-            Bloom::NATURAL,
-            AtmosphereEnvironmentMapLight::default(),
-            Msaa::Off,
-            IsDefaultUiCamera,
-            TemporalAntiAliasing::default(),
-            ScreenSpaceReflections {
-                min_perceptual_roughness: 0.0..0.0,
-                ..default()
-            },
-        ),
+        Transform::from_xyz(0., 5., 0.),
+        PlayerCamera::default(),
+        FPSCamera::default(),
+        // Exposure { ev100: 13.0 },
+        // Tonemapping::AcesFitted,
+        // Bloom::NATURAL,
+        // Msaa::Off,
+        // TemporalAntiAliasing::default(),
+        // ScreenSpaceReflections {
+        //     min_perceptual_roughness: 0.0..0.0,
+        //     ..default()
+        // },
+        Skybox {
+            image: Some(
+                asset_server.load(
+                    "milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_cubemap.ktx2",
+                ),
+            ),
+            brightness: 100.,
+            rotation: Quat::IDENTITY,
+        },
+        LightProbe {
+            falloff: Vec3::splat(1000.),
+        },
+        EnvironmentMapLight {
+            diffuse_map: asset_server
+                .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_diffuse.ktx2"),
+            specular_map: asset_server
+                .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_specular.ktx2"),
+            intensity: 1000.,
+            rotation: Quat::IDENTITY,
+            affects_lightmapped_mesh_diffuse: true,
+        },
     ));
+
+    // AtmosphereSettings::default(),
 
     commands.spawn((
         Name::new("UI Camera"),
-        AtmosphereSettings::default(),
+        // AtmosphereSettings::default(),
         Camera2d,
         Camera {
             order: 1,

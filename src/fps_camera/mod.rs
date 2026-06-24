@@ -39,7 +39,7 @@ impl FPSCameraConfig {
 }
 
 /// Marker trait for fps camera
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone)]
 pub struct FPSCamera {
     pub pitch: f32,
     pub yaw: f32,
