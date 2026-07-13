@@ -18,16 +18,14 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::camera::visibility::RenderLayers;
-use bevy::color::palettes::css::{self, WHITE};
+use bevy::color::palettes::css::{self};
+use bevy::light::VolumetricLight;
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
-use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, Skybox, VolumetricLight};
 use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
 use bevy_skein::SkeinPlugin;
 
-use bevy::pbr::{AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections};
-use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::text::TextSection;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
@@ -184,7 +182,7 @@ fn main_menu() -> impl Scene {
         Children [
             (
                 menu_button("Play")
-                on(|_e: On<Pointer<Press>>, mut commands: Commands, _path: Option<Res<BeatMapPath>>| {
+                on(|_e: On<Pointer<Press>>, _commands: Commands, _path: Option<Res<BeatMapPath>>| {
                     // let f = FileDialog::default().set_directory("/").pick_file().unwrap();
                     // commands.insert_resource(BeatMapPath(f));
                     // commands.set_state(AppState::InGame);
@@ -475,9 +473,9 @@ impl Material for SkyMaterial {
 
 fn light_and_cameras(
     mut commands: Commands,
-    mut scattering_mediums: ResMut<Assets<ScatteringMedium>>,
-    mut images: ResMut<Assets<Image>>,
-    asset_server: ResMut<AssetServer>,
+    _scattering_mediums: ResMut<Assets<ScatteringMedium>>,
+    _images: ResMut<Assets<Image>>,
+    _asset_server: ResMut<AssetServer>,
 ) {
     commands.spawn((
         DirectionalLight {
@@ -502,10 +500,6 @@ fn light_and_cameras(
         }))
     });
 
-    // commands.spawn(Atmosphere::earth(
-    //     scattering_mediums.add(ScatteringMedium::earth(256, 256)),
-    // ));
-
     commands.spawn((
         Camera3d::default(),
         RenderLayers::from_layers(&[0, 1]),
@@ -516,43 +510,12 @@ fn light_and_cameras(
         Transform::from_xyz(0., 5., 0.),
         PlayerCamera::default(),
         FPSCamera::default(),
-        // Exposure { ev100: 13.0 },
-        // Tonemapping::AcesFitted,
-        // Bloom::NATURAL,
-        // Msaa::Off,
-        // TemporalAntiAliasing::default(),
-        // ScreenSpaceReflections {
-        //     min_perceptual_roughness: 0.0..0.0,
-        //     ..default()
-        // },
-        // Skybox {
-        //     image: Some(
-        //         asset_server.load(
-        //             "milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_cubemap.ktx2",
-        //         ),
-        //     ),
-        //     brightness: 100.,
-        //     rotation: Quat::IDENTITY,
-        // },
-        // LightProbe {
-        //     falloff: Vec3::splat(1000.),
-        // },
-        // EnvironmentMapLight {
-        //     diffuse_map: asset_server
-        //         .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_diffuse.ktx2"),
-        //     specular_map: asset_server
-        //         .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_specular.ktx2"),
-        //     intensity: 1000.,
-        //     rotation: Quat::IDENTITY,
-        //     affects_lightmapped_mesh_diffuse: true,
-        // },
+        DespawnOnExit(AppState::InGame),
     ));
-
-    // AtmosphereSettings::default(),
 
     commands.spawn((
         Name::new("UI Camera"),
-        // AtmosphereSettings::default(),
+        DespawnOnExit(AppState::InGame),
         Camera2d,
         Camera {
             order: 1,

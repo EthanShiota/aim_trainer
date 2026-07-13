@@ -1,6 +1,6 @@
 use bevy::{color::palettes::css::WHITE, prelude::*};
 
-use crate::{AudioBuffer, target_plugin::TargetMarker};
+use crate::{AppState, AudioBuffer, target_plugin::TargetMarker};
 #[derive(Resource)]
 pub struct BeatMap {
     pub song: Handle<AudioBuffer>,
@@ -14,7 +14,10 @@ impl BeatMap {
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
     ) {
-        commands.spawn(AudioPlayer(self.song.clone()));
+        commands.spawn((
+            AudioPlayer(self.song.clone()),
+            DespawnOnExit(AppState::InGame),
+        ));
         // TODO: Change from placeholder material
         let mesh = meshes.add(Sphere::new(1.));
         let mat = materials.add(StandardMaterial::from_color(WHITE));
@@ -25,6 +28,7 @@ impl BeatMap {
                 Mesh3d(mesh.clone()),
                 MeshMaterial3d(mat.clone()),
                 Visibility::Hidden,
+                DespawnOnExit(AppState::InGame),
             ));
         }
     }

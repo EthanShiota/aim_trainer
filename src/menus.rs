@@ -1,21 +1,17 @@
-use std::{path::PathBuf, sync::Arc};
-
 use bevy::{
-    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
+    camera::{CameraOutputMode, visibility::RenderLayers},
     color::palettes::tailwind::*,
     prelude::*,
     render::render_resource::BlendState,
 };
 use bevy_egui::{
-    egui::{Color32, LayerId, Style, Theme, Ui, UiBuilder, Visuals},
+    egui::{Color32, Ui, UiBuilder},
     prelude::*,
 };
 
-use crate::{
-    AppState, BeatMapPath,
-    osu_parser::{BeatMapOsu, Metadata},
-    scenarios,
-};
+use crate::{AppState, osu_parser::BeatMapOsu, scenarios};
+#[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct MenuSet;
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -23,7 +19,7 @@ impl Plugin for MenuPlugin {
             EguiPrimaryContextPass,
             main_menu.run_if(in_state(AppState::Menu)),
         )
-        .add_systems(OnEnter(AppState::Menu), setup);
+        .add_systems(Startup, setup);
     }
 }
 
