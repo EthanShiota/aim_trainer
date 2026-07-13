@@ -3,6 +3,7 @@
 ## Gameplay
 
 - Sliders
+- Better parser
 - Proper map select
 - Return to menu
 - Scoring

@@ -8,21 +8,17 @@ mod target_plugin;
 
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
+use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use rfd::FileDialog;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
-use std::os::windows::raw::SOCKET;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use bevy::anti_alias::taa::TemporalAntiAliasing;
-use bevy::camera::Exposure;
 use bevy::camera::visibility::RenderLayers;
 use bevy::color::palettes::css::{self, WHITE};
-use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
 use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, Skybox, VolumetricLight};
@@ -93,6 +89,7 @@ fn main() {
             menus::MenuPlugin,
             WorldInspectorPlugin::new().run_if(resource_equals(target_plugin::DebugMode(true))),
         ))
+        .add_plugins(MaterialPlugin::<SkyMaterial>::default())
         // INFO: State
         .insert_state(AppState::Menu)
         .add_sub_state::<GameState>()
@@ -405,11 +402,20 @@ fn pause_transition(
             Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
             BorderColor::all(css::BLACK)
             Children [
+            (
                 Node {width: percent(100.), align_items: AlignItems::Center}
                 on(|_: On<Pointer<Press>>, mut commands: Commands| {
                     commands.set_state(GameState::Playing);
                 })
                 Text::new("Exit")
+            ),
+            (
+                Node {width: percent(100.), align_items: AlignItems::Center}
+                on(|_: On<Pointer<Press>>, mut commands: Commands| {
+                    commands.set_state(AppState::Menu);
+                })
+                Text::new("Main Menu")
+            )
             ]
         ]
     });
@@ -455,26 +461,46 @@ impl Decodable for AudioBuffer {
     }
 }
 
+#[derive(AsBindGroup, Debug, Clone, Asset, Reflect)]
+pub struct SkyMaterial {
+    #[uniform(0)]
+    pub color: LinearRgba,
+}
+
+impl Material for SkyMaterial {
+    fn fragment_shader() -> bevy::shader::ShaderRef {
+        "shaders/SkyMaterial.wgsl".into()
+    }
+}
+
 fn light_and_cameras(
     mut commands: Commands,
     mut scattering_mediums: ResMut<Assets<ScatteringMedium>>,
     mut images: ResMut<Assets<Image>>,
     asset_server: ResMut<AssetServer>,
 ) {
-    // commands.spawn((
-    //     DirectionalLight {
-    //         shadow_maps_enabled: true,
-    //         // lux::RAW_SUNLIGHT is recommended for use with this feature, since
-    //         // other values approximate sunlight *post-scattering* in various
-    //         // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
-    //         // sun unfiltered by the atmosphere, so it is the proper input for
-    //         // sunlight to be filtered by the atmosphere.
-    //         illuminance: lux::RAW_SUNLIGHT,
-    //         ..default()
-    //     },
-    //     Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
-    //     VolumetricLight,
-    // ));
+    commands.spawn((
+        DirectionalLight {
+            shadow_maps_enabled: true,
+            // lux::RAW_SUNLIGHT is recommended for use with this feature, since
+            // other values approximate sunlight *post-scattering* in various
+            // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
+            // sun unfiltered by the atmosphere, so it is the proper input for
+            // sunlight to be filtered by the atmosphere.
+            illuminance: lux::RAW_SUNLIGHT,
+            ..default()
+        },
+        Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        VolumetricLight,
+    ));
+
+    commands.spawn_scene(bsn! {
+        #Sky
+        Mesh3d(asset_value(Sphere::new(1000.).mesh().ico(7).unwrap().with_inverted_winding().unwrap()))
+        MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
+            color: RED_100.into()
+        }))
+    });
 
     // commands.spawn(Atmosphere::earth(
     //     scattering_mediums.add(ScatteringMedium::earth(256, 256)),
@@ -499,27 +525,27 @@ fn light_and_cameras(
         //     min_perceptual_roughness: 0.0..0.0,
         //     ..default()
         // },
-        Skybox {
-            image: Some(
-                asset_server.load(
-                    "milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_cubemap.ktx2",
-                ),
-            ),
-            brightness: 100.,
-            rotation: Quat::IDENTITY,
-        },
-        LightProbe {
-            falloff: Vec3::splat(1000.),
-        },
-        EnvironmentMapLight {
-            diffuse_map: asset_server
-                .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_diffuse.ktx2"),
-            specular_map: asset_server
-                .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_specular.ktx2"),
-            intensity: 1000.,
-            rotation: Quat::IDENTITY,
-            affects_lightmapped_mesh_diffuse: true,
-        },
+        // Skybox {
+        //     image: Some(
+        //         asset_server.load(
+        //             "milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_cubemap.ktx2",
+        //         ),
+        //     ),
+        //     brightness: 100.,
+        //     rotation: Quat::IDENTITY,
+        // },
+        // LightProbe {
+        //     falloff: Vec3::splat(1000.),
+        // },
+        // EnvironmentMapLight {
+        //     diffuse_map: asset_server
+        //         .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_diffuse.ktx2"),
+        //     specular_map: asset_server
+        //         .load("milky-way-skybox-hdri-panorama/textures/Milky way 4k HDRI_0_specular.ktx2"),
+        //     intensity: 1000.,
+        //     rotation: Quat::IDENTITY,
+        //     affects_lightmapped_mesh_diffuse: true,
+        // },
     ));
 
     // AtmosphereSettings::default(),
