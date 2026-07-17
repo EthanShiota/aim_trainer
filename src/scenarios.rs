@@ -3,8 +3,8 @@ use rodio::Source;
 use std::{fs::File, path::Path, time::Duration};
 
 use crate::{
-    AudioBuffer, BeatMapPath, EditMode, GameStats, SceneTimer,
-    osu_parser::{self, BeatMapOsu},
+    AudioBuffer, EditMode, GameStats, SceneTimer,
+    osu_parser::BeatMapOsu,
     target_plugin::{BeatMap, TargetMarker},
 };
 
@@ -87,8 +87,8 @@ pub fn osu(
             //     return None;
             // }
             let (max_x, max_y) = (512f32, 384f32);
-            let x = (hit_obj.x as f32 / max_x) * width - width / 2.;
-            let y = (1. - (hit_obj.y as f32 / max_y)) * height - height / 2.;
+            let x = (hit_obj.position.x as f32 / max_x) * width - width / 2.;
+            let y = (1. - (hit_obj.position.y as f32 / max_y)) * height - height / 2.;
             let t = hit_obj.time;
 
             Some((
