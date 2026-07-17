@@ -1,23 +1,21 @@
-use std::{collections::HashMap, error::Error, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, error::Error, path::PathBuf};
 
-use bevy::prelude::{Deref, DerefMut};
 use nom::{
     IResult, Parser,
-    branch::alt,
     bytes::{
-        complete::{is_not, tag, take},
+        complete::{is_not, tag},
         take_till,
     },
     character::{
-        anychar, char,
+        char,
         complete::{
-            alpha1, alphanumeric1, crlf, digit1, line_ending, multispace0, multispace1, newline,
+            alphanumeric1, digit1, line_ending, multispace0, multispace1,
             not_line_ending, one_of,
         },
     },
-    combinator::{cond, eof, map, map_res, not, opt, recognize, value},
-    error::{context, dbg_dmp},
-    multi::{many_till, many0, many1, separated_list1},
+    combinator::{map, opt, recognize},
+    error::context,
+    multi::{many0, many1, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated},
 };
 
@@ -263,7 +261,7 @@ impl BeatMapOsu {
         let s = std::fs::read_to_string(value.clone())?;
 
         let (_, parse_res) = parser(&s).unwrap();
-        let (metadata, sections) = parse_res;
+        let (_metadata, sections) = parse_res;
         let sections: HashMap<OsuHeader, OsuValue> = sections.into_iter().collect();
         let OsuValue::KV(general) = sections.get(&OsuHeader::General).unwrap() else {
             unreachable!()
