@@ -1,9 +1,11 @@
 mod beat_map;
+mod curve_marker;
 mod spawner;
 mod spawner_volume;
 mod target;
 mod target_marker;
 pub use beat_map::*;
+pub use curve_marker::CurveMarker;
 pub use spawner::*;
 pub use spawner_volume::*;
 pub use target::*;

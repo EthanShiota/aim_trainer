@@ -1,10 +1,14 @@
 use bevy::{color::palettes::css::WHITE, prelude::*};
 
-use crate::{AppState, AudioBuffer, target_plugin::TargetMarker};
+use crate::{
+    AppState, AudioBuffer,
+    target_plugin::{CurveMarker, TargetMarker},
+};
 #[derive(Resource)]
 pub struct BeatMap {
     pub song: Handle<AudioBuffer>,
-    pub hit_targets: Vec<(TargetMarker, Transform)>,
+    pub target_markers: Vec<(TargetMarker, Transform)>,
+    pub target_curves: Vec<CurveMarker>,
 }
 
 impl BeatMap {
@@ -21,7 +25,7 @@ impl BeatMap {
         // TODO: Change from placeholder material
         let mesh = meshes.add(Sphere::new(1.));
         let mat = materials.add(StandardMaterial::from_color(WHITE));
-        for (target, transform) in self.hit_targets.iter().cloned() {
+        for (target, transform) in self.target_markers.iter().cloned() {
             commands.spawn((
                 target,
                 transform,
@@ -31,16 +35,9 @@ impl BeatMap {
                 DespawnOnExit(AppState::InGame),
             ));
         }
-    }
 
-    pub fn save(&mut self, targets: Query<(&TargetMarker, &Transform)>) {
-        if targets.is_empty() {
-            log::warn!("empty save!");
-            return;
+        for curve_marker in self.target_curves.iter().cloned() {
+            commands.spawn(curve_marker);
         }
-        self.hit_targets = targets
-            .iter()
-            .map(|(a, b)| (a.clone(), b.clone()))
-            .collect();
     }
 }

@@ -9,13 +9,13 @@ use nom::{
     character::{
         char,
         complete::{
-            alphanumeric1, digit1, line_ending, multispace0, multispace1,
-            not_line_ending, one_of,
+            alphanumeric1, digit1, line_ending, multispace0, multispace1, not_line_ending, one_of,
         },
     },
     combinator::{map, opt, recognize},
     error::context,
     multi::{many0, many1, separated_list1},
+    number::complete::recognize_float,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
 };
 
@@ -25,25 +25,25 @@ pub struct HitObject {
     // integer milliseconds
     pub time: usize,
     pub type_bitmask: u8,
-    hit_sound: u8,
+    pub hit_sound: u8,
     // Extra stuff
     // TODO: Should be enum
-    object_params: Option<SliderParams>,
+    pub object_params: Option<SliderParams>,
     // Last item, is optional
-    hit_sample: Option<Vec<u8>>,
+    pub hit_sample: Option<Vec<u8>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Point {
-    pub x: usize,
-    pub y: usize,
+    pub x: i32,
+    pub y: i32,
 }
 #[derive(Clone)]
-struct SliderParams {
-    curve_type: CurveType,
-    curve_points: Vec<Point>,
-    slides: usize,
-    length: f32,
+pub struct SliderParams {
+    pub curve_type: CurveType,
+    pub curve_points: Vec<Point>,
+    pub slides: usize,
+    pub length: f32,
     // INFO: unimplemented
     // edge_sounds:
     // edge_sets:
@@ -53,11 +53,11 @@ fn parse_slider_params(s: &[&str]) -> Result<SliderParams, Box<dyn Error>> {
     let point = separated_pair(
         delimited(
             multispace0::<_, nom::error::Error<&str>>,
-            digit1,
+            recognize_float,
             multispace0,
         ),
         char(':'),
-        preceded(multispace0, digit1),
+        preceded(multispace0, recognize_float),
     );
     let (_remainder, (slider_type, points)) = (
         preceded(multispace0, one_of("BCLP")),
@@ -74,8 +74,8 @@ fn parse_slider_params(s: &[&str]) -> Result<SliderParams, Box<dyn Error>> {
         curve_points: points
             .iter()
             .map(|(x, y)| Point {
-                x: x.parse().unwrap(),
-                y: y.parse().unwrap(),
+                x: x.trim().parse().unwrap(),
+                y: y.trim().parse().unwrap(),
             })
             .collect(),
         slides,
@@ -108,8 +108,8 @@ impl TryFrom<&[&str]> for HitObject {
     fn try_from(s: &[&str]) -> Result<Self, Self::Error> {
         let mut iter = s.iter();
 
-        let x: usize = iter.next().unwrap().parse()?;
-        let y: usize = iter.next().unwrap().parse()?;
+        let x: i32 = iter.next().unwrap().parse()?;
+        let y: i32 = iter.next().unwrap().parse()?;
         let position = Point { x, y };
         let time: usize = iter.next().unwrap().parse()?;
         let type_bitmask: u8 = iter.next().unwrap().parse()?;
@@ -260,7 +260,7 @@ impl BeatMapOsu {
     pub fn new(value: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let s = std::fs::read_to_string(value.clone())?;
 
-        let (_, parse_res) = parser(&s).unwrap();
+        let (_, parse_res) = parser(&s).map_err(|e| e.to_owned())?;
         let (_metadata, sections) = parse_res;
         let sections: HashMap<OsuHeader, OsuValue> = sections.into_iter().collect();
         let OsuValue::KV(general) = sections.get(&OsuHeader::General).unwrap() else {

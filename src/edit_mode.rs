@@ -47,9 +47,6 @@ fn edit_mode_ui(
     spawned_targets: Query<(Entity, &Target)>,
 ) -> Result {
     egui::Window::new("edit").show(contexts.ctx_mut()?, |ui| {
-        if ui.button("save").clicked() {
-            beat_map.save(targets);
-        }
         if ui.button("reset").clicked() {
             for (ent, _) in spawned_targets {
                 commands.entity(ent).despawn();

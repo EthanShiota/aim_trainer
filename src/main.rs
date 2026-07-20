@@ -359,7 +359,7 @@ fn update_ui(stats: Option<Res<GameStats>>, text: Populated<&mut Text, With<Scor
 fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> Result {
     egui::Window::new("Debug Inspector").show(contexts.ctx_mut()?, |ui| {
         if let Some(beat_map) = beat_map {
-            let mut songs = beat_map.hit_targets.clone();
+            let mut songs = beat_map.target_markers.clone();
             songs.sort_by_key(|v| v.0.0);
             egui::ScrollArea::new([false, true])
                 .max_height(400.)
