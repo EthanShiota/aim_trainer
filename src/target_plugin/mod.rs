@@ -1,4 +1,3 @@
-
 use bevy::{
     camera::visibility::RenderLayers, input::common_conditions::input_just_pressed, prelude::*,
 };
@@ -34,6 +33,7 @@ impl Plugin for TargetPlugin {
             .init_state::<SpawnerState>()
             // INFO: Target Material
             .add_plugins(MaterialPlugin::<TargetMaterial>::default())
+            .add_plugins(CurvePlugin)
             // INFO: Gizmo
             .insert_gizmo_config(
                 SpawnerGizmo,

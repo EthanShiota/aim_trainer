@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{math::cubic_splines::LinearSpline, prelude::*};
 use rodio::Source;
 use std::{fs::File, path::Path, time::Duration};
 
@@ -45,6 +45,7 @@ pub fn osu(
 
     let width = 50.;
     let height = 20.;
+    // TODO: Fix length, add cycles (slides)
     let (target_markers, target_curves) =
         osu_beat_map
             .hit_objects
@@ -94,11 +95,10 @@ pub fn osu(
                             curr_curve.push(*points.last().unwrap());
                             curves.push(curr_curve);
 
-                            let curve = bevy::math::curve::FunctionCurve::new(
-                                Interval::new(0., 1.).unwrap(),
-                                |i| {
+                            let curve =
+                                bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
                                     let n = curves.len();
-                                    let curve_n = (i * n as f32).floor();
+                                    let curve_n = (i * (n - 1) as f32).floor();
                                     let curve = &curves[curve_n as usize];
 
                                     let n = curve.len();
@@ -109,20 +109,46 @@ pub fn osu(
                                             beta[k] = beta[k] * (1. - i) + beta[k + 1] * i;
                                         }
                                     }
-                                    beta[0].extend(0.)
-                                },
-                            )
-                            .resample_auto(100)
-                            .unwrap();
+                                    // TODO: Map 3d better
+                                    beta[0].extend(-50.)
+                                })
+                                .resample_auto(100)
+                                .unwrap();
 
                             target_curves.push(CurveMarker {
                                 curve,
-                                lifetime: Timer::new(Duration::from_secs_f32(32.), TimerMode::Once),
+                                lifetime: Timer::new(
+                                    Duration::from_millis(t as u64),
+                                    TimerMode::Once,
+                                ),
                             });
                         }
                         parser::CurveType::CentripetalCatmullRom => todo!(),
-                        parser::CurveType::Linear => todo!(),
-                        parser::CurveType::PerfectCircle => todo!(),
+                        parser::CurveType::Linear => {
+                            // Linear path between all points
+                            // curve_points
+                            let points = std::iter::once(vec2(x, y))
+                                .chain(curve_points.iter().map(|p| map_point(*p).into()));
+                            let linear_spline = LinearSpline::new(points);
+                            let curve = linear_spline
+                                .to_curve()
+                                .unwrap()
+                                // TODO: Map 3d better
+                                .map(|p| p.extend(-50.))
+                                .resample_auto(100)
+                                .unwrap();
+                            target_curves.push(CurveMarker {
+                                curve,
+                                lifetime: Timer::new(
+                                    Duration::from_millis(t as u64),
+                                    TimerMode::Once,
+                                ),
+                            });
+                        }
+                        parser::CurveType::PerfectCircle => {
+                            // TODO: PerfectCircle
+                            todo!()
+                        }
                     }
                 }
 

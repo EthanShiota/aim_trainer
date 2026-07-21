@@ -1,10 +1,21 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{
+    animation::{animate_targets, animated_field},
+    color::palettes::tailwind::RED_100,
+    prelude::*,
+};
 
-struct CurvePlugin;
+use crate::{AppState, GameState};
+
+pub struct CurvePlugin;
 impl Plugin for CurvePlugin {
-    fn build(&self, app: &mut App) {}
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            tick_curve_marker.run_if(in_state(GameState::Playing)),
+        );
+    }
 }
 
 /// Display preview of curve and then spawn curve in
@@ -23,7 +34,15 @@ fn tick_curve_marker(
     for (ent, mut curve_marker) in q_curve_marker.iter_mut() {
         curve_marker.lifetime.tick(time.delta());
         if curve_marker.lifetime.just_finished() {
-            // TODO:! spawn curve
+            commands.spawn_scene(bsn! {
+                Mesh3d(asset_value(Sphere::new(3.)))
+                MeshMaterial3d::<StandardMaterial>(asset_value(StandardMaterial{ unlit: true, ..StandardMaterial::from_color(RED_100)}))
+                Transform {
+                    translation: {curve_marker.curve.sample_unchecked(0.)}
+                }
+                DespawnOnExit::<AppState>(AppState::InGame)
+            });
+            info!("Spawned Curve");
 
             commands.entity(ent).remove::<CurveMarker>();
         }
