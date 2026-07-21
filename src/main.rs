@@ -2,7 +2,6 @@ mod edit_mode;
 mod fps_camera;
 mod materials;
 mod menus;
-mod osu_parser;
 mod scenarios;
 mod target_plugin;
 

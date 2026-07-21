@@ -291,35 +291,36 @@ impl BeatMapOsu {
     }
 }
 
-#[test]
-fn parser_test() {
-    BeatMapOsu::new(
-        "osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu"
-            .into(),
-    );
-}
-
-#[test]
-fn nom_parser_test() {
-    let input = include_str!(
-        "../osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu"
-    );
-    let (s, (metadata, res)) = parser(input).unwrap();
-
-    println!("meta: {}", metadata);
-    for (header, value) in res {
-        println!("header: {:?}", header);
-        match value {
-            OsuValue::KV(value) => {
-                for (k, v) in value {
-                    println!("{} = {}", k, v);
-                }
-            }
-            OsuValue::LIST(list) => {
-                for item in list {
-                    println!("{item:?}");
-                }
-            }
-        }
-    }
-}
+// TODO: Include beatmap test in added files
+// #[test]
+// fn parser_test() {
+//     BeatMapOsu::new(
+//         "osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu"
+//             .into(),
+//     );
+// }
+//
+// #[test]
+// fn nom_parser_test() {
+//     let input = include_str!(
+//         "../osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu"
+//     );
+//     let (s, (metadata, res)) = parser(input).unwrap();
+//
+//     println!("meta: {}", metadata);
+//     for (header, value) in res {
+//         println!("header: {:?}", header);
+//         match value {
+//             OsuValue::KV(value) => {
+//                 for (k, v) in value {
+//                     println!("{} = {}", k, v);
+//                 }
+//             }
+//             OsuValue::LIST(list) => {
+//                 for item in list {
+//                     println!("{item:?}");
+//                 }
+//             }
+//         }
+//     }
+// }

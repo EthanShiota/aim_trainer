@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+parser = { path = "./crates/parser" }
 bevy = { version = "0.19.0", features = [
   "free_camera",
   "mesh_picking",
@@ -16,9 +17,9 @@ bevy = { version = "0.19.0", features = [
   "ktx2",
 ] }
 nom = "8.0.0"
-bevy_egui = "0.40.1"
+bevy_egui = "0.41.1"
 bevy_skein = "0.6.0"
-bevy-inspector-egui = { git = "https://github.com/taboky-dev/bevy-inspector-egui", rev = "873c32b" }
+bevy-inspector-egui = "0.37.0"
 symphonia-adapter-libopus = "0.3.0"
 symphonia = "0.6.0"
 cpal = "0.18.1"
@@ -65,4 +66,4 @@ debug-assertions = false
 codegen-units = 1
 # Do a second optimization pass over the entire program, including dependencies.
 # Slows compile times, marginal improvements.
-lto = "thin"
+# lto = "thin"

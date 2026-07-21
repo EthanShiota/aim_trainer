@@ -4,9 +4,9 @@ use std::{fs::File, path::Path, time::Duration};
 
 use crate::{
     AudioBuffer, EditMode, GameStats, SceneTimer,
-    osu_parser::{BeatMapOsu, Point, SliderParams},
     target_plugin::{BeatMap, CurveMarker, TargetMarker},
 };
+use parser::{BeatMapOsu, Point, SliderParams};
 
 pub fn osu(
     In(osu_beat_map): In<BeatMapOsu>,
@@ -71,7 +71,7 @@ pub fn osu(
                         curve_type,
                     } = curve_params;
                     match curve_type {
-                        crate::osu_parser::CurveType::Bezier => {
+                        parser::CurveType::Bezier => {
                             let points: Vec<_> = std::iter::once(vec2(x, y))
                                 .chain(curve_points.iter().map(|p| map_point(*p).into()))
                                 .collect();
@@ -120,9 +120,9 @@ pub fn osu(
                                 lifetime: Timer::new(Duration::from_secs_f32(32.), TimerMode::Once),
                             });
                         }
-                        crate::osu_parser::CurveType::CentripetalCatmullRom => todo!(),
-                        crate::osu_parser::CurveType::Linear => todo!(),
-                        crate::osu_parser::CurveType::PerfectCircle => todo!(),
+                        parser::CurveType::CentripetalCatmullRom => todo!(),
+                        parser::CurveType::Linear => todo!(),
+                        parser::CurveType::PerfectCircle => todo!(),
                     }
                 }
 

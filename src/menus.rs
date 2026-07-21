@@ -1,3 +1,5 @@
+use std::time;
+
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
     color::palettes::tailwind::*,
@@ -9,7 +11,8 @@ use bevy_egui::{
     prelude::*,
 };
 
-use crate::{AppState, osu_parser::BeatMapOsu, scenarios};
+use crate::{AppState, scenarios};
+use parser::BeatMapOsu;
 #[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct MenuSet;
 pub struct MenuPlugin;
@@ -70,19 +73,27 @@ fn main_menu(
         style.visuals = vis;
     });
     if beat_maps.is_empty() {
+        let now = time::Instant::now();
+        let mut count = 0;
+        warn!("begin serialization");
         let beatmap_dir = "osu_beatmaps";
         for file in std::fs::read_dir(beatmap_dir).unwrap().flat_map(|w| w.ok()) {
             let mut versions = vec![];
             for ent in file.path().read_dir().unwrap() {
                 if let Some(map) = ent.ok().and_then(|dir| BeatMapOsu::new(dir.path()).ok()) {
+                    count += 1;
                     versions.push(map);
                 }
             }
             beat_maps.push(versions);
         }
+        warn!(
+            "end serialization of {count} maps in {} secs",
+            time::Instant::now().duration_since(now).as_secs_f64()
+        );
     }
 
-    egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
+    egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
         for versions in beat_maps.iter() {
             if versions.len() > 0 {
                 egui::CollapsingHeader::new(&versions[0].metadata.title).show(ui, |ui| {
