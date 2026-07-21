@@ -1,6 +1,9 @@
-use bevy::{math::cubic_splines::LinearSpline, prelude::*};
+use bevy::{
+    math::{bounding::Bounded2d, cubic_splines::LinearSpline},
+    prelude::*,
+};
 use rodio::Source;
-use std::{fs::File, path::Path, time::Duration};
+use std::{f32::consts::TAU, fs::File, path::Path, time::Duration};
 
 use crate::{
     AudioBuffer, EditMode, GameStats, SceneTimer,
@@ -80,19 +83,15 @@ pub fn osu(
                             // set of nary bezier curves
                             let mut curves = vec![];
                             let mut curr_curve = vec![];
-                            for window in points.windows(2) {
-                                if let [curr, next] = window {
-                                    if curr != next {
-                                        curr_curve.push(*curr);
-                                    } else {
-                                        curves.push(curr_curve.clone());
-                                        curr_curve.clear();
-                                    }
-                                } else {
-                                    panic!()
+                            for [curr, next] in points.array_windows::<2>() {
+                                curr_curve.push(*curr);
+                                if curr == next {
+                                    curves.push(curr_curve.clone());
+                                    curr_curve.clear();
                                 }
                             }
-                            curr_curve.push(*points.last().unwrap());
+                            // curr_curve.push(*points.last().unwrap());
+                            // FIX: Bezier Curves are broken I think
                             curves.push(curr_curve);
 
                             let curve =
@@ -103,7 +102,6 @@ pub fn osu(
 
                                     let n = curve.len();
                                     let mut beta = curve.clone();
-                                    let i = curve_n.fract();
                                     for j in 1..n {
                                         for k in 0..(n - j) {
                                             beta[k] = beta[k] * (1. - i) + beta[k + 1] * i;
@@ -137,17 +135,48 @@ pub fn osu(
                                 .map(|p| p.extend(-50.))
                                 .resample_auto(100)
                                 .unwrap();
-                            target_curves.push(CurveMarker {
-                                curve,
-                                lifetime: Timer::new(
-                                    Duration::from_millis(t as u64),
-                                    TimerMode::Once,
-                                ),
-                            });
+                            // target_curves.push(CurveMarker {
+                            //     curve,
+                            //     lifetime: Timer::new(
+                            //         Duration::from_millis(t as u64),
+                            //         TimerMode::Once,
+                            //     ),
+                            // });
                         }
                         parser::CurveType::PerfectCircle => {
                             // TODO: PerfectCircle
-                            todo!()
+                            let points = std::iter::once(vec2(x, y))
+                                .chain(curve_points.iter().map(|p| map_point(*p).into()))
+                                .collect::<Vec<_>>();
+                            if points.len() != 3 {
+                                // TODO: default to bezier for PerfectCircle with 3+ points
+                                todo!()
+                            }
+
+                            let bounding_circle = bevy::math::primitives::Triangle2d::new(
+                                points[0], points[1], points[2],
+                            )
+                            .bounding_circle(Isometry2d::IDENTITY);
+                            let r = bounding_circle.radius();
+                            let p = bounding_circle.center;
+                            let curve =
+                                bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
+                                    // TODO: Map 3d better
+                                    vec3(
+                                        f32::sin(i * TAU) * r + p.x,
+                                        f32::cos(i * TAU) * r + p.y,
+                                        -50.,
+                                    )
+                                })
+                                .resample_auto(100)
+                                .unwrap();
+                            // target_curves.push(CurveMarker {
+                            //     curve,
+                            //     lifetime: Timer::new(
+                            //         Duration::from_millis(t as u64),
+                            //         TimerMode::Once,
+                            //     ),
+                            // });
                         }
                     }
                 }

@@ -42,6 +42,13 @@ impl Plugin for TargetPlugin {
                     ..default()
                 },
             )
+            .insert_gizmo_config(
+                CurveGizmo,
+                GizmoConfig {
+                    render_layers: RenderLayers::layer(1),
+                    ..default()
+                },
+            )
             .add_systems(
                 Update,
                 debug_spawn_target.run_if(

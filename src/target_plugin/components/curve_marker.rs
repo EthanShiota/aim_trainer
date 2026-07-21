@@ -2,18 +2,21 @@ use std::time::Duration;
 
 use bevy::{
     animation::{animate_targets, animated_field},
-    color::palettes::tailwind::RED_100,
+    color::palettes::tailwind::{RED_100, RED_800},
     prelude::*,
 };
 
-use crate::{AppState, GameState};
+use crate::{AppState, GameState, target_plugin::DebugMode};
 
 pub struct CurvePlugin;
 impl Plugin for CurvePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            tick_curve_marker.run_if(in_state(GameState::Playing)),
+            (
+                tick_curve_marker.run_if(in_state(GameState::Playing)),
+                curve_marker_gizmos.run_if(resource_equals(DebugMode(true))),
+            ),
         );
     }
 }
@@ -24,6 +27,18 @@ pub struct CurveMarker {
     pub curve: bevy::math::curve::SampleAutoCurve<Vec3>,
     // Spawns curve when duration is zero
     pub lifetime: Timer,
+}
+
+#[derive(GizmoConfigGroup, Default, Reflect)]
+pub struct CurveGizmo;
+
+fn curve_marker_gizmos(
+    q_curve_marker: Query<(Entity, &mut CurveMarker)>,
+    mut gizmos: Gizmos<CurveGizmo>,
+) {
+    for (_, curve) in q_curve_marker {
+        gizmos.curve_3d(&curve.curve, (0..1000).map(|a| a as f32 / 1000.), RED_800);
+    }
 }
 
 fn tick_curve_marker(
@@ -44,7 +59,7 @@ fn tick_curve_marker(
             });
             info!("Spawned Curve");
 
-            commands.entity(ent).remove::<CurveMarker>();
+            commands.entity(ent).despawn();
         }
     }
 }

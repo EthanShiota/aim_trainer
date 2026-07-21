@@ -37,7 +37,7 @@ impl BeatMap {
         }
 
         for curve_marker in self.target_curves.iter().cloned() {
-            commands.spawn(curve_marker);
+            commands.spawn((curve_marker, DespawnOnExit(AppState::InGame)));
         }
     }
 }
