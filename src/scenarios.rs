@@ -1,5 +1,8 @@
 use bevy::{
-    math::{bounding::Bounded2d, cubic_splines::LinearSpline},
+    math::{
+        bounding::Bounded2d,
+        cubic_splines::{self, LinearSpline},
+    },
     prelude::*,
 };
 use rodio::Source;
@@ -74,47 +77,13 @@ pub fn osu(
                         slides,
                         curve_type,
                     } = curve_params;
+                    let points: Vec<_> = std::iter::once(vec2(x, y))
+                        .chain(curve_points.iter().map(|p| map_point(*p).into()))
+                        .collect();
                     match curve_type {
                         parser::CurveType::Bezier => {
-                            let points: Vec<_> = std::iter::once(vec2(x, y))
-                                .chain(curve_points.iter().map(|p| map_point(*p).into()))
-                                .collect();
-
-                            // set of nary bezier curves
-                            let mut curves = vec![];
-                            let mut curr_curve = vec![];
-                            for [curr, next] in points.array_windows::<2>() {
-                                curr_curve.push(*curr);
-                                if curr == next {
-                                    curves.push(curr_curve.clone());
-                                    curr_curve.clear();
-                                }
-                            }
-                            // curr_curve.push(*points.last().unwrap());
-                            // FIX: Bezier Curves are broken I think
-                            curves.push(curr_curve);
-
-                            let curve =
-                                bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
-                                    let n = curves.len();
-                                    let curve_n = (i * (n - 1) as f32).floor();
-                                    let curve = &curves[curve_n as usize];
-
-                                    let n = curve.len();
-                                    let mut beta = curve.clone();
-                                    for j in 1..n {
-                                        for k in 0..(n - j) {
-                                            beta[k] = beta[k] * (1. - i) + beta[k + 1] * i;
-                                        }
-                                    }
-                                    // TODO: Map 3d better
-                                    beta[0].extend(-50.)
-                                })
-                                .resample_auto(100)
-                                .unwrap();
-
                             target_curves.push(CurveMarker {
-                                curve,
+                                curve: points_to_bezier(points),
                                 lifetime: Timer::new(
                                     Duration::from_millis(t as u64),
                                     TimerMode::Once,
@@ -125,8 +94,6 @@ pub fn osu(
                         parser::CurveType::Linear => {
                             // Linear path between all points
                             // curve_points
-                            let points = std::iter::once(vec2(x, y))
-                                .chain(curve_points.iter().map(|p| map_point(*p).into()));
                             let linear_spline = LinearSpline::new(points);
                             let curve = linear_spline
                                 .to_curve()
@@ -145,9 +112,6 @@ pub fn osu(
                         }
                         parser::CurveType::PerfectCircle => {
                             // TODO: PerfectCircle
-                            let points = std::iter::once(vec2(x, y))
-                                .chain(curve_points.iter().map(|p| map_point(*p).into()))
-                                .collect::<Vec<_>>();
                             if points.len() != 3 {
                                 // TODO: default to bezier for PerfectCircle with 3+ points
                                 todo!()
@@ -195,4 +159,62 @@ pub fn osu(
     stopwatch.reset();
     beat_map.spawn(commands.reborrow(), meshes, materials);
     commands.insert_resource(beat_map);
+}
+
+fn points_to_bezier(points: Vec<Vec2>) -> SampleAutoCurve<Vec3> {
+    // set of nary bezier curves
+    let mut curves = vec![];
+    let mut curr_curve = vec![];
+    for [curr, next] in points.array_windows::<2>() {
+        curr_curve.push(*curr);
+        if curr == next {
+            curves.push(curr_curve.clone());
+            curr_curve.clear();
+        }
+    }
+    curr_curve.push(*points.last().unwrap());
+    // FIX: Bezier Curves are broken I think
+    curves.push(curr_curve);
+
+    let curve = bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
+        let n = curves.len();
+        let curve_n = (i * (n - 1) as f32).floor();
+        let curve = &curves[curve_n as usize];
+
+        let n = curve.len();
+        let mut beta = curve.clone();
+        for j in 1..n {
+            for k in 0..(n - j) {
+                beta[k] = beta[k] * (1. - i) + beta[k + 1] * i;
+            }
+        }
+        // TODO: Map 3d better
+        beta[0].extend(-50.)
+    })
+    .resample_auto(100)
+    .unwrap();
+    curve
+}
+
+#[test]
+fn bezier() {
+    let points = vec![[vec2(0., 0.), vec2(0., 1.), vec2(1., 1.), vec2(2., 1.)]];
+    let spline = cubic_splines::CubicBezier::new(points.clone())
+        .to_curve()
+        .unwrap();
+    let true_curve = spline.resample_auto(100).unwrap();
+    let my_curve = points_to_bezier(points[0].to_vec())
+        .map(|p| p.xy())
+        .resample_auto(100)
+        .unwrap();
+    let lhs: Vec<_> = true_curve.samples(10).unwrap().collect();
+    let rhs: Vec<_> = my_curve.samples(10).unwrap().collect();
+    for (r, l) in rhs.iter().zip(lhs.iter()) {
+        println!("{l:?} = {r:?}");
+    }
+    assert!(
+        lhs.iter()
+            .zip(rhs.iter())
+            .all(|(a, b)| { (a - b).length().abs() < 0.001 })
+    );
 }
