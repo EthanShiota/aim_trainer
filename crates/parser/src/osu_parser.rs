@@ -154,10 +154,66 @@ pub struct Metadata {
     pub version: String,
 }
 #[derive(Clone)]
+pub struct Difficulty {
+    pub hp_drain_rate: f32,
+    pub circle_size: f32,
+    pub overall_difficulty: f32,
+    pub approach_rate: f32,
+    pub slider_multiplier: f32,
+    pub slider_tick_rate: f32,
+}
+
+#[derive(Clone)]
+#[allow(unused)]
+pub struct TimingPoint {
+    // INFO: time in milliseconds for some reason this is a decimal and not a integer
+    time: f32,
+    beat_length: f32,
+    meter: u32,
+    sample_set: u32,
+    sample_index: u32,
+    volume: u32,
+    uninherited: bool,
+    effects: u32,
+}
+
+impl TryFrom<&[&str]> for TimingPoint {
+    type Error = Box<dyn Error>;
+    fn try_from(value: &[&str]) -> Result<Self, Self::Error> {
+        if let [
+            time,
+            beat_length,
+            meter,
+            sample_set,
+            sample_index,
+            volume,
+            uninherited,
+            effects,
+        ] = *value
+        {
+            Ok(Self {
+                time: time.parse()?,
+                beat_length: beat_length.parse()?,
+                meter: meter.parse()?,
+                sample_set: sample_set.parse()?,
+                sample_index: sample_index.parse()?,
+                volume: volume.parse()?,
+                uninherited: uninherited.parse::<u32>().map(|i| i == 0)?,
+                effects: effects.parse()?,
+            })
+        } else {
+            // Parse Error
+            return Err(format!("Could not parse timing point {:?}", value).into());
+        }
+    }
+}
+#[derive(Clone)]
 pub struct BeatMapOsu {
     pub beat_map_path: PathBuf,
     pub general: General,
     pub metadata: Metadata,
+    pub difficulty: Difficulty,
+    pub timing_points: Vec<TimingPoint>,
     pub hit_objects: Vec<HitObject>,
 }
 
@@ -273,6 +329,14 @@ impl BeatMapOsu {
             unreachable!()
         };
 
+        let OsuValue::KV(difficulty) = sections.get(&OsuHeader::Difficulty).unwrap() else {
+            unreachable!()
+        };
+
+        let OsuValue::LIST(timing_points) = sections.get(&OsuHeader::TimingPoints).unwrap() else {
+            unreachable!()
+        };
+
         Ok(BeatMapOsu {
             beat_map_path: value,
             general: General {
@@ -283,6 +347,18 @@ impl BeatMapOsu {
                 title: metadata["Title"].to_string(),
                 version: metadata["Version"].to_string(),
             },
+            difficulty: Difficulty {
+                hp_drain_rate: difficulty["HPDrainRate"].parse().unwrap(),
+                circle_size: difficulty["CircleSize"].parse().unwrap(),
+                overall_difficulty: difficulty["OverallDifficulty"].parse().unwrap(),
+                approach_rate: difficulty["ApproachRate"].parse().unwrap(),
+                slider_multiplier: difficulty["SliderMultiplier"].parse().unwrap(),
+                slider_tick_rate: difficulty["SliderTickRate"].parse().unwrap(),
+            },
+            timing_points: timing_points
+                .into_iter()
+                .map(|e| TimingPoint::try_from(e.as_slice()).unwrap())
+                .collect(),
             hit_objects: hitobj
                 .into_iter()
                 .map(|s| s.as_slice().try_into().unwrap())
@@ -291,36 +367,30 @@ impl BeatMapOsu {
     }
 }
 
-// TODO: Include beatmap test in added files
-// #[test]
-// fn parser_test() {
-//     BeatMapOsu::new(
-//         "osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu"
-//             .into(),
-//     );
-// }
-//
-// #[test]
-// fn nom_parser_test() {
-//     let input = include_str!(
-//         "../osu_beatmaps/163112 Kuba Oms - My Love.osz/Kuba Oms - My Love (W h i t e) [Normal].osu"
-//     );
-//     let (s, (metadata, res)) = parser(input).unwrap();
-//
-//     println!("meta: {}", metadata);
-//     for (header, value) in res {
-//         println!("header: {:?}", header);
-//         match value {
-//             OsuValue::KV(value) => {
-//                 for (k, v) in value {
-//                     println!("{} = {}", k, v);
-//                 }
-//             }
-//             OsuValue::LIST(list) => {
-//                 for item in list {
-//                     println!("{item:?}");
-//                 }
-//             }
-//         }
-//     }
-// }
+#[test]
+fn parser_test() {
+    BeatMapOsu::new("../test/Kuba Oms - My Love (W h i t e) [Insane].osu".into()).unwrap();
+}
+
+#[test]
+fn nom_parser_test() {
+    let input = include_str!("../test/Kuba Oms - My Love (W h i t e) [Insane].osu");
+    let (_, (metadata, res)) = parser(input).unwrap();
+
+    println!("meta: {}", metadata);
+    for (header, value) in res {
+        println!("header: {:?}", header);
+        match value {
+            OsuValue::KV(value) => {
+                for (k, v) in value {
+                    println!("{} = {}", k, v);
+                }
+            }
+            OsuValue::LIST(list) => {
+                for item in list {
+                    println!("{item:?}");
+                }
+            }
+        }
+    }
+}
