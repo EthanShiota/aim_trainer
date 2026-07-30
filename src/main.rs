@@ -7,6 +7,7 @@ mod target_plugin;
 
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
+use bevy::input::common_conditions::input_toggle_active;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -84,7 +85,7 @@ fn main() {
             EguiPlugin::default(),
             edit_mode::EditPlugin,
             menus::MenuPlugin,
-            WorldInspectorPlugin::new().run_if(resource_equals(target_plugin::DebugMode(true))),
+            WorldInspectorPlugin::new(),
         ))
         .add_plugins(MaterialPlugin::<SkyMaterial>::default())
         // INFO: State
@@ -126,7 +127,7 @@ fn main() {
         // INFO: Egui context systems
         .add_systems(
             EguiPrimaryContextPass,
-            (debug_window.run_if(resource_equals(target_plugin::DebugMode(true))),)
+            (debug_window.run_if(resource_equals(target_plugin::DebugMode(true))))
                 .run_if(in_state(AppState::InGame)),
         )
         // INFO: Update score when target is destroyed
@@ -281,12 +282,12 @@ fn playing(
     mut targets: Query<(Entity, &Target, &mut Transform)>,
 ) {
     // Scale down targets overtime
-    for (ent, _target, mut transform) in targets.iter_mut() {
-        transform.scale += -0.2 * time.delta_secs();
-        if transform.scale.x <= 0.0 {
-            commands.entity(ent).despawn();
-        }
-    }
+    // for (ent, _target, mut transform) in targets.iter_mut() {
+    //     transform.scale += -0.2 * time.delta_secs();
+    //     if transform.scale.x <= 0.0 {
+    //         commands.entity(ent).despawn();
+    //     }
+    // }
     // if let Ok(sink) = q_audio.single() {
     //     stopwatch.set_elapsed(sink.position());
     // }
@@ -356,7 +357,7 @@ fn update_ui(stats: Option<Res<GameStats>>, text: Populated<&mut Text, With<Scor
 }
 
 fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> Result {
-    egui::Window::new("Debug Inspector").show(contexts.ctx_mut()?, |ui| {
+    egui::Window::new("Beatmap Debug Inspector").show(contexts.ctx_mut()?, |ui| {
         if let Some(beat_map) = beat_map {
             let mut songs = beat_map.target_markers.clone();
             songs.sort_by_key(|v| v.0.0);

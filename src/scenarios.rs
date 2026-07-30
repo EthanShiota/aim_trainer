@@ -1,3 +1,4 @@
+#![allow(unused)]
 use bevy::{
     math::{
         bounding::Bounded2d,
@@ -6,14 +7,37 @@ use bevy::{
     prelude::*,
 };
 use rodio::Source;
-use std::{f32::consts::TAU, fs::File, path::Path, time::Duration};
+use std::{f32::consts::TAU, fs::File, iter::Peekable, path::Path, time::Duration};
 
 use crate::{
     AudioBuffer, EditMode, GameStats, SceneTimer,
     target_plugin::{BeatMap, CurveMarker, TargetMarker},
 };
-use parser::{BeatMapOsu, Point, SliderParams};
+use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
+struct BeatMapDecoderState {
+    target_points: Vec<(TargetMarker, Transform)>,
+    target_curves: Vec<CurveMarker>,
+    beat_length: f32,
+    slider_velocity: f32,
+    previous_timing_point: f32,
+    timing_point_iter: Peekable<vec::IntoIter<TimingPoint>>,
+}
 
+impl BeatMapDecoderState {
+    fn new(timing_points: Vec<TimingPoint>) -> Self {
+        let mut iter = timing_points.into_iter().peekable();
+        let timing_point = iter.next().unwrap();
+        assert!(timing_point.uninherited);
+        Self {
+            target_points: default(),
+            target_curves: default(),
+            beat_length: timing_point.beat_length,
+            slider_velocity: 1.,
+            previous_timing_point: timing_point.time,
+            timing_point_iter: iter,
+        }
+    }
+}
 pub fn osu(
     In(osu_beat_map): In<BeatMapOsu>,
     mut commands: Commands,
@@ -52,105 +76,133 @@ pub fn osu(
     let width = 50.;
     let height = 20.;
     // TODO: Fix length, add cycles (slides)
-    let (target_markers, target_curves) =
-        osu_beat_map
-            .hit_objects
-            .iter()
-            .fold((vec![], vec![]), |acc, hit_obj| {
-                let (mut target_points, mut target_curves) = acc;
-                // if hit_obj.type_bitmask & 1 == 1 {
-                //     return None;
-                // }
-                let (max_x, max_y) = (512f32, 384f32);
-                let map_point = |point: Point| {
-                    let x = (point.x as f32 / max_x) * width - width / 2.;
-                    let y = (1. - (point.y as f32 / max_y)) * height - height / 2.;
-                    (x, y)
-                };
-                let (x, y) = map_point(hit_obj.position);
-                let t = hit_obj.time;
+    let BeatMapDecoderState {
+        target_points: target_markers,
+        target_curves,
+        ..
+    } = osu_beat_map.hit_objects.iter().fold(
+        BeatMapDecoderState::new(osu_beat_map.timing_points),
+        |mut state, hit_obj| {
+            let (max_x, max_y) = (512f32, 384f32);
+            let map_point = |point: Point| {
+                let x = (point.x as f32 / max_x) * width - width / 2.;
+                let y = (1. - (point.y as f32 / max_y)) * height - height / 2.;
+                (x, y)
+            };
+            let (x, y) = map_point(hit_obj.position);
+            let t = hit_obj.time;
 
-                if let Some(curve_params) = hit_obj.object_params.clone() {
-                    let SliderParams {
-                        curve_points,
-                        length,
-                        slides,
-                        curve_type,
-                    } = curve_params;
-                    let points: Vec<_> = std::iter::once(vec2(x, y))
-                        .chain(curve_points.iter().map(|p| map_point(*p).into()))
-                        .collect();
-                    match curve_type {
-                        parser::CurveType::Bezier => {
-                            target_curves.push(CurveMarker {
-                                curve: points_to_bezier(points),
-                                lifetime: Timer::new(
-                                    Duration::from_millis(t as u64),
-                                    TimerMode::Once,
-                                ),
-                            });
+            if t > (state.previous_timing_point as usize) {
+                if let Some(next_timing_point) = state.timing_point_iter.peek() {
+                    if t >= next_timing_point.time as usize {
+                        // apply next timing point
+                        if next_timing_point.uninherited {
+                            state.beat_length = next_timing_point.beat_length;
+                        } else {
+                            // slider velocity
+                            state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
                         }
-                        parser::CurveType::CentripetalCatmullRom => todo!(),
-                        parser::CurveType::Linear => {
-                            // Linear path between all points
-                            // curve_points
-                            let linear_spline = LinearSpline::new(points);
-                            let curve = linear_spline
-                                .to_curve()
-                                .unwrap()
-                                // TODO: Map 3d better
-                                .map(|p| p.extend(-50.))
-                                .resample_auto(100)
-                                .unwrap();
-                            // target_curves.push(CurveMarker {
-                            //     curve,
-                            //     lifetime: Timer::new(
-                            //         Duration::from_millis(t as u64),
-                            //         TimerMode::Once,
-                            //     ),
-                            // });
-                        }
-                        parser::CurveType::PerfectCircle => {
-                            // TODO: PerfectCircle
-                            if points.len() != 3 {
-                                // TODO: default to bezier for PerfectCircle with 3+ points
-                                todo!()
-                            }
-
-                            let bounding_circle = bevy::math::primitives::Triangle2d::new(
-                                points[0], points[1], points[2],
-                            )
-                            .bounding_circle(Isometry2d::IDENTITY);
-                            let r = bounding_circle.radius();
-                            let p = bounding_circle.center;
-                            let curve =
-                                bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
-                                    // TODO: Map 3d better
-                                    vec3(
-                                        f32::sin(i * TAU) * r + p.x,
-                                        f32::cos(i * TAU) * r + p.y,
-                                        -50.,
-                                    )
-                                })
-                                .resample_auto(100)
-                                .unwrap();
-                            // target_curves.push(CurveMarker {
-                            //     curve,
-                            //     lifetime: Timer::new(
-                            //         Duration::from_millis(t as u64),
-                            //         TimerMode::Once,
-                            //     ),
-                            // });
-                        }
+                        state.previous_timing_point = next_timing_point.time;
+                        state.timing_point_iter.next();
                     }
                 }
+            }
 
-                target_points.push((
-                    TargetMarker(Duration::from_millis(t as u64)),
-                    Transform::from_xyz(x, y, -50.),
-                ));
-                (target_points, target_curves)
-            });
+            if let Some(curve_params) = hit_obj.object_params.clone() {
+                let SliderParams {
+                    curve_points,
+                    length,
+                    slides,
+                    curve_type,
+                } = curve_params;
+                let points: Vec<_> = std::iter::once(vec2(x, y))
+                    .chain(curve_points.iter().map(|p| map_point(*p).into()))
+                    .collect();
+
+                let slider_multiplier = osu_beat_map.difficulty.slider_multiplier;
+                // INFO: milliseconds it takes to complete one slide of the slider
+                let curve_duration = ((length
+                    / (slider_multiplier * 100. * state.slider_velocity))
+                    * state.beat_length)
+                    / 1000.
+                    * slides as f32;
+                info!("{:?}", curve_duration);
+
+                // TODO: Implement slides
+                match curve_type {
+                    parser::CurveType::Bezier => {
+                        state.target_curves.push(CurveMarker {
+                            curve: points_to_bezier(points)
+                                .reparametrize_linear(Interval::new(0., curve_duration).unwrap())
+                                .unwrap()
+                                .resample_auto(100)
+                                .unwrap(),
+                            // truncated to nearest millisecond
+                            duration: curve_duration,
+                            lifetime: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
+                        });
+                    }
+                    parser::CurveType::CentripetalCatmullRom => todo!(),
+                    parser::CurveType::Linear => {
+                        // Linear path between all points
+                        // curve_points
+                        let linear_spline = LinearSpline::new(points);
+                        let curve = linear_spline
+                            .to_curve()
+                            .unwrap()
+                            // TODO: Map 3d better
+                            .map(|p| p.extend(-50.))
+                            .resample_auto(100)
+                            .unwrap();
+                        // target_curves.push(CurveMarker {
+                        //     curve,
+                        //     lifetime: Timer::new(
+                        //         Duration::from_millis(t as u64),
+                        //         TimerMode::Once,
+                        //     ),
+                        // });
+                    }
+                    parser::CurveType::PerfectCircle => {
+                        // TODO: PerfectCircle
+                        if points.len() != 3 {
+                            // TODO: default to bezier for PerfectCircle with 3+ points
+                            todo!()
+                        }
+
+                        let bounding_circle = bevy::math::primitives::Triangle2d::new(
+                            points[0], points[1], points[2],
+                        )
+                        .bounding_circle(Isometry2d::IDENTITY);
+                        let r = bounding_circle.radius();
+                        let p = bounding_circle.center;
+                        let curve = bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
+                            // TODO: Map 3d better
+                            vec3(
+                                f32::sin(i * TAU) * r + p.x,
+                                f32::cos(i * TAU) * r + p.y,
+                                -50.,
+                            )
+                        })
+                        .resample_auto(100)
+                        .unwrap();
+                        // target_curves.push(CurveMarker {
+                        //     curve,
+                        //     lifetime: Timer::new(
+                        //         Duration::from_millis(t as u64),
+                        //         TimerMode::Once,
+                        //     ),
+                        // });
+                    }
+                }
+            }
+
+            state.target_points.push((
+                TargetMarker(Duration::from_millis(t as u64)),
+                Transform::from_xyz(x, y, -50.),
+            ));
+            state
+        },
+    );
     let beat_map = BeatMap {
         song: audio.add(AudioBuffer(audio_buffer)),
         target_curves,

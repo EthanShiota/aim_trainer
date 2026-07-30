@@ -19,6 +19,7 @@ pub struct TargetSpawner {
     pub limit: Option<usize>,
 }
 
+#[allow(unused)]
 impl TargetSpawnerTemplate {
     pub fn new(period: Duration, limit: Option<usize>) -> Self {
         Self {
@@ -60,7 +61,7 @@ pub fn debug_spawn_target(
     commands.spawn((
         Mesh3d(target_res.mesh.clone()),
         MeshMaterial3d(target_res.material.clone()),
-        Target,
+        Target::default(),
         player_camera_transform.with_translation(
             player_camera_transform.translation + *player_camera_transform.forward() * 40.,
         ),
@@ -94,7 +95,7 @@ pub fn spawner_loop(
             } + transform.translation;
 
             commands.entity(entity).with_child((
-                Target,
+                Target::Counter(1),
                 Visibility::Visible,
                 Transform::from_translation(target_translation),
                 Mesh3d(target_res.mesh.clone()),

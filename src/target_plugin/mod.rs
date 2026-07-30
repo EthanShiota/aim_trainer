@@ -20,6 +20,7 @@ use crate::{AppState, GameState};
 pub struct TargetPlugin;
 
 #[derive(States, Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq, Default)]
+#[allow(unused)]
 pub enum SpawnerState {
     #[default]
     Active,

@@ -21,6 +21,7 @@ pub fn tick_target_marker(
     _time: Res<Time<Real>>,
     target: Res<TargetResource>,
 ) {
+    // Approach window
     let window = Duration::from_secs_f32(1.);
 
     for (ent, marker, transform, _mat) in q_markers.iter() {
@@ -38,7 +39,7 @@ pub fn tick_target_marker(
                 Mesh3d(target.mesh.clone()),
                 MeshMaterial3d(target.material.clone()),
                 transform.clone(),
-                Target,
+                Target::Counter(1),
             ));
             commands.entity(ent).despawn();
         }

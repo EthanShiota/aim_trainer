@@ -164,17 +164,16 @@ pub struct Difficulty {
 }
 
 #[derive(Clone)]
-#[allow(unused)]
 pub struct TimingPoint {
     // INFO: time in milliseconds for some reason this is a decimal and not a integer
-    time: f32,
-    beat_length: f32,
-    meter: u32,
-    sample_set: u32,
-    sample_index: u32,
-    volume: u32,
-    uninherited: bool,
-    effects: u32,
+    pub time: f32,
+    pub beat_length: f32,
+    pub meter: u32,
+    pub sample_set: u32,
+    pub sample_index: u32,
+    pub volume: u32,
+    pub uninherited: bool,
+    pub effects: u32,
 }
 
 impl TryFrom<&[&str]> for TimingPoint {
@@ -198,7 +197,7 @@ impl TryFrom<&[&str]> for TimingPoint {
                 sample_set: sample_set.parse()?,
                 sample_index: sample_index.parse()?,
                 volume: volume.parse()?,
-                uninherited: uninherited.parse::<u32>().map(|i| i == 0)?,
+                uninherited: uninherited.parse::<u32>().map(|i| i == 1)?,
                 effects: effects.parse()?,
             })
         } else {
@@ -337,6 +336,15 @@ impl BeatMapOsu {
             unreachable!()
         };
 
+        let timing_points: Vec<_> = timing_points
+            .into_iter()
+            .map(|e| TimingPoint::try_from(e.as_slice()).unwrap())
+            .collect();
+
+        // INFO: this should be sorted
+        // TODO: Don't do this
+        assert!(timing_points.is_sorted_by_key(|k| k.time));
+
         Ok(BeatMapOsu {
             beat_map_path: value,
             general: General {
@@ -355,10 +363,7 @@ impl BeatMapOsu {
                 slider_multiplier: difficulty["SliderMultiplier"].parse().unwrap(),
                 slider_tick_rate: difficulty["SliderTickRate"].parse().unwrap(),
             },
-            timing_points: timing_points
-                .into_iter()
-                .map(|e| TimingPoint::try_from(e.as_slice()).unwrap())
-                .collect(),
+            timing_points,
             hit_objects: hitobj
                 .into_iter()
                 .map(|s| s.as_slice().try_into().unwrap())

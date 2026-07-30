@@ -1,12 +1,17 @@
+#![allow(unused)]
 use std::time::Duration;
 
 use bevy::{
-    animation::{animate_targets, animated_field},
-    color::palettes::tailwind::{RED_100, RED_800},
+    animation::{AnimatedBy, animate_targets, animated_field},
+    asset::uuid::Uuid,
+    color::palettes::tailwind::{BLUE_300, RED_100, RED_800},
     prelude::*,
 };
 
-use crate::{AppState, GameState, target_plugin::DebugMode};
+use crate::{
+    AppState, GameState,
+    target_plugin::{DebugMode, Target},
+};
 
 pub struct CurvePlugin;
 impl Plugin for CurvePlugin {
@@ -25,6 +30,8 @@ impl Plugin for CurvePlugin {
 #[derive(Component, Clone)]
 pub struct CurveMarker {
     pub curve: bevy::math::curve::SampleAutoCurve<Vec3>,
+    // duration of curve
+    pub duration: f32,
     // Spawns curve when duration is zero
     pub lifetime: Timer,
 }
@@ -37,29 +44,57 @@ fn curve_marker_gizmos(
     mut gizmos: Gizmos<CurveGizmo>,
 ) {
     for (_, curve) in q_curve_marker {
-        gizmos.curve_3d(&curve.curve, (0..1000).map(|a| a as f32 / 1000.), RED_800);
+        gizmos.curve_3d(
+            &curve.curve,
+            (0..100).map(|i| (i as f32 / 100.) * curve.duration),
+            BLUE_300,
+        );
     }
 }
-
 fn tick_curve_marker(
     mut q_curve_marker: Query<(Entity, &mut CurveMarker)>,
+    mut animation_clips: ResMut<Assets<AnimationClip>>,
+    mut animation_graphs: ResMut<Assets<AnimationGraph>>,
     time: Res<Time<Real>>,
     mut commands: Commands,
 ) {
     for (ent, mut curve_marker) in q_curve_marker.iter_mut() {
         curve_marker.lifetime.tick(time.delta());
         if curve_marker.lifetime.just_finished() {
-            commands.spawn_scene(bsn! {
+            let mut clip = AnimationClip::default();
+            let curve = AnimatableCurve::new(
+                animated_field!(Transform::translation),
+                curve_marker.curve.clone(),
+            );
+
+            let anim_id =
+                bevy::animation::AnimationTargetId(Uuid::from_u128(ent.index_u32() as u128));
+            clip.add_curve_to_target(anim_id, curve);
+            clip.set_duration(curve_marker.duration);
+
+            let (animation_graph, animation_node_index) =
+                AnimationGraph::from_clip(animation_clips.add(clip));
+
+            let mut player = AnimationPlayer::default();
+            player.start(animation_node_index);
+
+            let mut scene = commands.spawn_scene(bsn! {
                 Mesh3d(asset_value(Sphere::new(3.)))
                 MeshMaterial3d::<StandardMaterial>(asset_value(StandardMaterial{ unlit: true, ..StandardMaterial::from_color(RED_100)}))
                 Transform {
                     translation: {curve_marker.curve.sample_unchecked(0.)}
                 }
                 DespawnOnExit::<AppState>(AppState::InGame)
-            });
+                template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
+                template_value(player)
+                AnimationGraphHandle(asset_value(animation_graph))
+            }).id();
+
+            commands.entity(scene).insert((anim_id, AnimatedBy(scene)));
+
             info!("Spawned Curve");
 
-            commands.entity(ent).despawn();
+            // commands.entity(ent).despawn();
         }
     }
 }

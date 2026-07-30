@@ -10,6 +10,7 @@ use bevy_egui::{
     egui::{Color32, Ui, UiBuilder},
     prelude::*,
 };
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 use crate::{AppState, scenarios};
 use parser::BeatMapOsu;
