@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use std::time::Duration;
 
 use crate::{
-    AudioBuffer,
+    AppState, AudioBuffer,
     target_plugin::{Target, TargetResource},
 };
 #[derive(Component, DerefMut, Deref, PartialEq, PartialOrd, Clone)]
@@ -28,6 +28,7 @@ pub fn tick_target_marker(
         let approach_marker = marker.saturating_sub(window);
         let current_time = q_sink.position();
 
+        // TODO: Use correct window
         if approach_marker <= current_time {
             // show target marker
             commands.entity(ent).insert(Visibility::Visible);
@@ -35,12 +36,16 @@ pub fn tick_target_marker(
         if **marker <= current_time {
             log::info!("spawned {:?}", **marker);
             // spawn target
-            commands.spawn((
-                Mesh3d(target.mesh.clone()),
-                MeshMaterial3d(target.material.clone()),
-                transform.clone(),
-                Target::Counter(1),
-            ));
+            let target = commands
+                .spawn((
+                    Mesh3d(target.mesh.clone()),
+                    MeshMaterial3d(target.material.clone()),
+                    transform.clone(),
+                    DespawnOnExit::<AppState>(AppState::InGame),
+                    Target::Counter(1),
+                ))
+                .id();
+            commands.delayed().secs(1.).entity(target).try_despawn();
             commands.entity(ent).despawn();
         }
     }

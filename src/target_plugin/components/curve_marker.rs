@@ -4,7 +4,8 @@ use std::time::Duration;
 use bevy::{
     animation::{AnimatedBy, animate_targets, animated_field},
     asset::uuid::Uuid,
-    color::palettes::tailwind::{BLUE_300, RED_100, RED_800},
+    color::palettes::tailwind::{BLUE_300, GREEN_400, RED_100, RED_800},
+    math::curve,
     prelude::*,
 };
 
@@ -46,7 +47,7 @@ fn curve_marker_gizmos(
     for (_, curve) in q_curve_marker {
         gizmos.curve_3d(
             &curve.curve,
-            (0..100).map(|i| (i as f32 / 100.) * curve.duration),
+            (0..100).map(|i| (i as f32 / 100.) * curve.curve.domain().end()),
             BLUE_300,
         );
     }
@@ -60,6 +61,28 @@ fn tick_curve_marker(
 ) {
     for (ent, mut curve_marker) in q_curve_marker.iter_mut() {
         curve_marker.lifetime.tick(time.delta());
+
+        // TODO: Use correct approach window
+        let approach_window = Duration::from_secs_f32(1.);
+        if (curve_marker.lifetime.remaining().abs_diff(approach_window)) <= time.delta() {
+            // show curve
+
+            // Construct polyline3d using samples
+            let samples = curve_marker.curve.samples(100).unwrap();
+            let polyline = Polyline3d::new(samples);
+
+            let mesh = polyline.mesh().build();
+            commands.entity(ent).apply_scene(bsn! {
+                Mesh3d(asset_value(mesh))
+                MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial{unlit: true, ..StandardMaterial::from_color(GREEN_400)}))
+                // Transform {
+                //     translation: {curve_marker.curve.sample(0.).unwrap()}
+                // }
+            });
+            info!("Curve Visual Spawned!");
+        }
+
+        // Spawns curve
         if curve_marker.lifetime.just_finished() {
             let mut clip = AnimationClip::default();
             let curve = AnimatableCurve::new(
@@ -78,7 +101,7 @@ fn tick_curve_marker(
             let mut player = AnimationPlayer::default();
             player.start(animation_node_index);
 
-            let mut scene = commands.spawn_scene(bsn! {
+            let mut slider = commands.spawn_scene(bsn! {
                 Mesh3d(asset_value(Sphere::new(3.)))
                 MeshMaterial3d::<StandardMaterial>(asset_value(StandardMaterial{ unlit: true, ..StandardMaterial::from_color(RED_100)}))
                 Transform {
@@ -90,11 +113,14 @@ fn tick_curve_marker(
                 AnimationGraphHandle(asset_value(animation_graph))
             }).id();
 
-            commands.entity(scene).insert((anim_id, AnimatedBy(scene)));
+            commands
+                .entity(slider)
+                .insert((anim_id, AnimatedBy(slider)));
+            let mut delay = commands.delayed();
+            delay.secs(curve_marker.duration).entity(slider).despawn();
+            delay.secs(curve_marker.duration).entity(ent).despawn();
 
             info!("Spawned Curve");
-
-            // commands.entity(ent).despawn();
         }
     }
 }
