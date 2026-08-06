@@ -7,7 +7,6 @@ mod target_plugin;
 
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
-use bevy::input::common_conditions::input_toggle_active;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -41,6 +40,23 @@ struct GameStats {
     time_left: Option<Duration>,
 }
 
+#[derive(Resource, Clone, Copy)]
+pub struct GameSettings {
+    pub volume: f32,
+    pub mouse_sensitivity: f32,
+    pub dpi: usize,
+}
+
+impl Default for GameSettings {
+    fn default() -> Self {
+        Self {
+            volume: 1.0,
+            mouse_sensitivity: 16.351,
+            dpi: 800,
+        }
+    }
+}
+
 #[derive(Resource, PartialEq, Debug, Default, DerefMut, Deref)]
 pub struct SceneTimer(Stopwatch);
 
@@ -62,6 +78,7 @@ fn main() {
             enabled: false,
             ..default()
         })
+        .insert_resource(GameSettings::default())
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
@@ -130,6 +147,8 @@ fn main() {
             (debug_window.run_if(resource_equals(target_plugin::DebugMode(true))))
                 .run_if(in_state(AppState::InGame)),
         )
+        // INFO: Sync settings to game systems
+        .add_systems(OnExit(AppState::Menu), sync_game_settings)
         // INFO: Update score when target is destroyed
         .add_observer(update_score)
         .run();
@@ -378,7 +397,9 @@ fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> R
 fn play_transition(
     mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
     mut grab_mode: ResMut<GrabMouse>,
+    mut time: ResMut<Time<Virtual>>,
 ) {
+    time.unpause();
     cursor_options.grab_mode = CursorGrabMode::Locked;
     cursor_options.visible = false;
     **grab_mode = true;
@@ -387,7 +408,9 @@ fn pause_transition(
     mut commands: Commands,
     mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
     mut grab_mode: ResMut<GrabMouse>,
+    mut time: ResMut<Time<Virtual>>,
 ) {
+    time.pause();
     **grab_mode = false;
     cursor_options.grab_mode = CursorGrabMode::None;
     cursor_options.visible = true;
@@ -547,4 +570,18 @@ fn toggle_fullscreen(
 
 fn update_score(_: On<TargetDestroyed>, mut stats: If<ResMut<GameStats>>) {
     stats.score += 1;
+}
+
+fn sync_game_settings(
+    settings: Res<GameSettings>,
+    mut fps_config: ResMut<crate::fps_camera::FPSCameraConfig>,
+    mut q_sink: Query<&mut AudioSink, With<AudioPlayer<AudioBuffer>>>,
+) {
+    let new_sens =
+        crate::fps_camera::FPSCameraConfig::with_sens(settings.mouse_sensitivity, settings.dpi);
+    fps_config.sensitivity = new_sens.sensitivity;
+
+    for mut sink in q_sink.iter_mut() {
+        sink.set_volume(bevy::audio::Volume::Linear(settings.volume));
+    }
 }

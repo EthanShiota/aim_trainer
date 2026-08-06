@@ -12,7 +12,7 @@ use bevy_egui::{
 };
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use crate::{AppState, scenarios};
+use crate::{AppState, GameSettings, scenarios};
 use parser::BeatMapOsu;
 #[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct MenuSet;
@@ -21,10 +21,19 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             EguiPrimaryContextPass,
-            main_menu.run_if(in_state(AppState::Menu)),
+            (main_menu, settings_window).run_if(in_state(AppState::Menu)),
         )
         .add_systems(Startup, setup);
     }
+}
+
+fn settings_window(mut contexts: EguiContexts, mut settings: ResMut<GameSettings>) -> Result {
+    egui::Window::new("Settings").show(contexts.ctx_mut()?, |ui| {
+        ui.add(egui::Slider::new(&mut settings.volume, 0.0..=1.0).text("Volume"));
+        ui.add(egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0).text("Mouse Sensitivity"));
+        ui.add(egui::Slider::new(&mut settings.dpi, 400..=3200).text("DPI"));
+    });
+    Ok(())
 }
 
 fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {

@@ -55,12 +55,28 @@ fn to_vec2(p: Point) -> Vec2 {
     }
 }
 fn convert_osu_to_world(point: Vec2) -> Vec3 {
-    let width = 40.;
-    let height = 40.;
+    let width = 30.;
+    let height = 30.;
     let (max_x, max_y) = (512f32, 384f32);
     let x = (point.x as f32 / max_x) * width - width / 2.;
     let y = (1. - (point.y as f32 / max_y)) * height - height / 2.;
-    vec3(x, y, -100.)
+    vec3(x, y, -50.)
+}
+
+fn circle_from_3_points(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
+    let m1 = (a + b) * 0.5;
+    let m2 = (a + c) * 0.5;
+    let ab = b - a;
+    let ac = c - a;
+    let perp_ab = Vec2::new(-ab.y, ab.x);
+    let perp_ac = Vec2::new(-ac.y, ac.x);
+
+    let denom = perp_ac.dot(perp_ab);
+    if denom.abs() < 1e-6 {
+        return m1;
+    }
+    let t = (m2 - m1).dot(perp_ac) / denom;
+    m1 + t * perp_ab
 }
 pub fn osu(
     In(osu_beat_map): In<BeatMapOsu>,
@@ -214,30 +230,28 @@ pub fn osu(
                         });
                     }
                     parser::CurveType::PerfectCircle => {
-                        // TODO: PerfectCircle
                         if points.len() != 3 {
                             // TODO: default to bezier for PerfectCircle with 3+ points
                             todo!()
                         }
 
-                        points
+                        let points: Vec<Vec2> = points
                             .clone()
                             .into_iter()
                             .map(|p| convert_osu_to_world(p).xy())
-                            .collect::<Vec<_>>();
+                            .collect();
 
-                        todo!();
-                        // TODO: CIRCLE
-                        // let x = points[0].powf(2.).length();
-                        // let y = points[1].powf(2.).length();
-                        // let r = f32::sqrt(x.powf(2.) + y.powf(2.) - points[2]);
-                        // let p = bounding_circle.center;
+                        let z = convert_osu_to_world(Vec2::ZERO).z;
+                        let center = circle_from_3_points(points[0], points[1], points[2]);
+                        let radius = center.distance(points[0]);
+
                         let curve = bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
-                            // TODO: Map 3d better
-                            convert_osu_to_world(vec2(
-                                f32::sin(i * TAU) * r + p.x,
-                                f32::cos(i * TAU) * r + p.y,
-                            ))
+                            let angle = i * TAU;
+                            let xy = vec2(
+                                center.x + radius * f32::cos(angle),
+                                center.y + radius * f32::sin(angle),
+                            );
+                            xy.extend(z)
                         })
                         .reparametrize_linear(
                             Interval::new(0., curve_duration / slides as f32).unwrap(),
@@ -334,4 +348,26 @@ fn bezier() {
         .resample_auto(100)
         .unwrap();
     assert!(compare_curves(true_curve, my_curve));
+}
+
+#[test]
+fn test_circle_from_3_points() {
+    let a = vec2(1., 0.);
+    let b = vec2(0., 1.);
+    let c = vec2(-1., 0.);
+    let center = circle_from_3_points(a, b, c);
+    assert!(center.norm() < 0.001);
+
+    let a = vec2(2., 0.);
+    let b = vec2(0., 2.);
+    let c = vec2(-2., 0.);
+    let center = circle_from_3_points(a, b, c);
+    assert!(center.norm() < 0.001);
+
+    let a = vec2(5., 0.);
+    let b = vec2(5., 5.);
+    let c = vec2(0., 5.);
+    let center = circle_from_3_points(a, b, c);
+    assert!((center.x - 2.5).abs() < 0.001);
+    assert!((center.y - 2.5).abs() < 0.001);
 }
