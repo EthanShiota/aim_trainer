@@ -2,19 +2,24 @@
 
 ## Gameplay
 
-- Sliders
-- Better parser
-- Proper map select
-- Return to menu
-- Scoring
-- Approach Window
+- [x] Sliders
+- [x] Better parser
+- [x] Proper map select
+- [x] Return to menu
+- [ ] Scoring
+- [ ] Approach Window
 
 ## Visuals
 
-- Hit Leadup
-- Highlight next target
+- [ ] Hit Leadup
+- [ ] Highlight next target
 
 ## Settings
 
-- Sensitivity
-- Volume
+- [x] Sensitivity
+- [x] Volume
+- [ ] save settings somewhere
+
+## Bugs
+
+- [ ] Spawn timings are not correct I think

@@ -19,7 +19,9 @@ use nom::{
     sequence::{delimited, pair, preceded, separated_pair, terminated},
 };
 
-#[derive(Clone)]
+use crate::CurveType::Bezier;
+
+#[derive(Clone, Debug)]
 pub struct HitObject {
     pub position: Point,
     // integer milliseconds
@@ -33,12 +35,12 @@ pub struct HitObject {
     pub hit_sample: Option<Vec<u8>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SliderParams {
     pub curve_type: CurveType,
     pub curve_points: Vec<Point>,
@@ -95,7 +97,7 @@ impl TryFrom<char> for CurveType {
         })
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CurveType {
     Bezier,
     CentripetalCatmullRom,
@@ -374,7 +376,12 @@ impl BeatMapOsu {
 
 #[test]
 fn parser_test() {
-    BeatMapOsu::new("../test/Kuba Oms - My Love (W h i t e) [Insane].osu".into()).unwrap();
+    dbg!(&std::env::current_dir().unwrap());
+    BeatMapOsu::new("test/Kuba Oms - My Love (W h i t e) [Insane].osu".into()).unwrap();
+    BeatMapOsu::new(
+        "test/Windbell - Flow of Life (TSAR  Tu Zi ST Remix) (vivicat) [Extra].osu".into(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -397,5 +404,28 @@ fn nom_parser_test() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn hit_object_test() {
+    let input = include_str!(
+        "../test/Windbell - Flow of Life (TSAR  Tu Zi ST Remix) (vivicat) [Extra].osu"
+    );
+    let (_, (metadata, res)) = parser(input).unwrap();
+    let map: std::collections::HashMap<_, _> = res.into_iter().collect();
+    if let Some(OsuValue::LIST(list)) = map.get(&OsuHeader::HitObjects) {
+        let hit_objs: Vec<HitObject> = list
+            .into_iter()
+            .map(|s| s.as_slice().try_into().unwrap())
+            .collect();
+        for slider in hit_objs.iter().filter(|o| {
+            o.object_params
+                .as_ref()
+                .is_some_and(|param| &param.curve_type == &Bezier)
+        }) {
+            println!("{:?}", slider.object_params.as_ref().unwrap().curve_points);
+        }
+        panic!()
     }
 }

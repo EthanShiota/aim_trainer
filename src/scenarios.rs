@@ -23,6 +23,38 @@ use crate::{
     target_plugin::{BeatMap, CurveMarker, TargetMarker},
 };
 use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
+
+fn linear_curve(points: Vec<Vec2>, curve_duration: f32, slides: usize) -> SampleAutoCurve<Vec3> {
+    let linear_curve = points
+        .array_windows::<2>()
+        .map(|&s| {
+            let c = LinearSpline::new(s)
+                .to_curve()
+                .unwrap()
+                .map(|p| convert_osu_to_world(p))
+                .reparametrize_linear(interval(0., s[0].distance(s[1])).unwrap())
+                .unwrap();
+            FunctionCurve::new(
+                c.domain(),
+                Box::new(move |t| c.sample_unchecked(t)) as Box<dyn Fn(f32) -> Vec3>,
+            )
+        })
+        .reduce(|acc, elm| {
+            let c = acc.chain(elm).unwrap();
+            FunctionCurve::new(c.domain(), Box::new(move |t| c.sample_unchecked(t)))
+        })
+        .unwrap()
+        .reparametrize_linear(Interval::new(0., curve_duration / slides as f32).unwrap())
+        .unwrap()
+        .ping_pong()
+        .unwrap()
+        .repeat(slides)
+        .unwrap()
+        .resample_auto(100 * slides)
+        .unwrap();
+
+    linear_curve
+}
 struct BeatMapDecoderState {
     target_points: Vec<(TargetMarker, Transform)>,
     target_curves: Vec<CurveMarker>,
@@ -160,9 +192,8 @@ pub fn osu(
                     * state.beat_length)
                     / 1000.)
                     * slides as f32;
-                info!("{:?}", curve_duration);
+                // info!("{:?}", curve_duration);
 
-                // TODO: Implement slides
                 match curve_type {
                     parser::CurveType::Bezier => {
                         let curve = points_to_bezier(points)
@@ -187,42 +218,7 @@ pub fn osu(
                     }
                     parser::CurveType::CentripetalCatmullRom => todo!(),
                     parser::CurveType::Linear => {
-                        // Linear path between all points
-                        // curve_points
-                        // let dists = points.array_windows::<2>().map(|[a, b]| a.distance(*b));
-                        // let line_length = dists.sum::<f32>();
-                        // assert_eq!(line_length, length);
-
-                        let linear_curve = points
-                            .array_windows::<2>()
-                            .map(|&s| {
-                                // Reparametrize so the time to traverse is proportional to length
-                                LinearSpline::new(s)
-                                    .to_curve()
-                                    .unwrap()
-                                    .reparametrize_linear(
-                                        interval(0., s[0].distance(s[1])).unwrap(),
-                                    )
-                                    .unwrap()
-                                    .resample_auto(100)
-                                    .unwrap()
-                            })
-                            .reduce(|acc, elm| acc.chain(elm).unwrap().resample_auto(100).unwrap());
-
-                        let curve = linear_curve
-                            .unwrap()
-                            .reparametrize_linear(
-                                Interval::new(0., curve_duration / slides as f32).unwrap(),
-                            )
-                            .unwrap()
-                            .map(|p| convert_osu_to_world(p))
-                            .ping_pong()
-                            .unwrap()
-                            .repeat(slides)
-                            .unwrap()
-                            .resample_auto(100 * slides)
-                            .unwrap();
-
+                        let curve = linear_curve(points, curve_duration, slides);
                         state.target_curves.push(CurveMarker {
                             curve,
                             duration: curve_duration,
@@ -290,8 +286,7 @@ pub fn osu(
     commands.insert_resource(beat_map);
 }
 
-fn points_to_bezier(points: Vec<Vec2>) -> FunctionCurve<Vec2, impl Fn(f32) -> Vec2> {
-    // set of nary bezier curves
+fn extract_nary_bezier(points: Vec<Vec2>) -> Vec<Vec<Vec2>> {
     let mut curves = vec![];
     let mut curr_curve = vec![];
     for [curr, next] in points.array_windows::<2>() {
@@ -301,23 +296,70 @@ fn points_to_bezier(points: Vec<Vec2>) -> FunctionCurve<Vec2, impl Fn(f32) -> Ve
             curr_curve.clear();
         }
     }
-    curr_curve.push(*points.last().unwrap());
-    curves.push(curr_curve);
+    // HACK:when curves have a n=1 section add it to previous instead of creating a 1 point bezier
+    if curr_curve.is_empty() {
+        curves.last_mut().unwrap().push(*points.last().unwrap());
+    } else {
+        curr_curve.push(*points.last().unwrap());
+        curves.push(curr_curve);
+    }
+    curves
+}
+fn points_to_bezier(points: Vec<Vec2>) -> FunctionCurve<Vec2, impl Fn(f32) -> Vec2> {
+    // set of nary bezier curves
+    let curves = extract_nary_bezier(points);
 
-    let curve = bevy::math::curve::FunctionCurve::new(Interval::UNIT, move |i| {
-        let n = curves.len();
-        let curve_n = (i * (n - 1) as f32).ceil();
-        let curve = &curves[curve_n as usize];
+    assert!(curves.iter().all(|curve| curve.len() >= 2));
+    let curve = curves
+        .into_iter()
+        .map(|curve| {
+            let c = FunctionCurve::new(Interval::UNIT, move |i| {
+                let n = curve.len();
+                let mut beta = curve.clone();
+                for j in 1..n {
+                    for k in 0..(n - j) {
+                        beta[k] = beta[k] * (1. - i) + beta[k + 1] * i;
+                    }
+                }
+                beta[0]
+            });
+            info!("{:?}", c.samples(10).unwrap().collect::<Vec<_>>());
+            let samples = c.samples(100).unwrap().collect::<Vec<_>>();
+            let length = samples
+                .clone()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .array_windows::<2>()
+                .map(|[a, b]| a.distance(*b))
+                .sum::<f32>();
+            let c = c
+                .reparametrize_linear(Interval::new(0., length).unwrap())
+                .unwrap();
+            FunctionCurve::new(
+                c.domain(),
+                Box::new(move |t| c.sample_unchecked(t)) as Box<dyn Fn(f32) -> Vec2>,
+            )
+        })
+        .reduce(|acc, c| {
+            let c = acc.chain(c).unwrap();
+            FunctionCurve::new(c.domain(), Box::new(move |t| c.sample_unchecked(t)))
+        })
+        .unwrap();
 
-        let n = curve.len();
-        let mut beta = curve.clone();
-        for j in 1..n {
-            for k in 0..(n - j) {
-                beta[k] = beta[k] * (1. - i) + beta[k + 1] * i;
-            }
-        }
-        beta[0]
-    });
+    // let curve = bevy::math::curve::FunctionCurve::new(Interval::UNIT, move |i| {
+    //     let n = curves.len();
+    //     let curve_n = (i * (n - 1) as f32).ceil();
+    //     let curve = &curves[curve_n as usize];
+    //
+    //     let n = curve.len();
+    //     let mut beta = curve.clone();
+    //     for j in 1..n {
+    //         for k in 0..(n - j) {
+    //             beta[k] = beta[k] * (1. - i) + beta[k + 1] * i;
+    //         }
+    //     }
+    //     beta[0]
+    // });
     curve
 }
 
@@ -348,6 +390,26 @@ fn bezier() {
         .resample_auto(100)
         .unwrap();
     assert!(compare_curves(true_curve, my_curve));
+}
+
+#[test]
+fn bezier_2() {
+    let points = vec![
+        vec2(277.0, 184.0),
+        vec2(208.0, 240.0),
+        vec2(224.0, 352.0),
+        vec2(224.0, 352.0),
+        vec2(160.0, 256.0),
+        vec2(64.0, 272.0),
+        vec2(64.0, 272.0),
+    ];
+    dbg!(extract_nary_bezier(points.clone()));
+    let curve_samples = points_to_bezier(points.clone())
+        .samples(10)
+        .unwrap()
+        .collect::<Vec<_>>();
+    info!("{curve_samples:?}");
+    panic!()
 }
 
 #[test]
