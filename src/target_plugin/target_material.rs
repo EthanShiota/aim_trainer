@@ -2,7 +2,7 @@ use bevy::{prelude::*, render::render_resource::AsBindGroup};
 
 #[derive(AsBindGroup, Debug, Clone, Asset, TypePath)]
 pub struct TargetMaterial {
-    #[uniform(0)]
+    #[uniform(100)]
     pub color: LinearRgba,
 }
 

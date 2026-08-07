@@ -7,7 +7,7 @@
 #import bevy_render::view::direction_view_to_world;
 #import bevy_render::maths
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> color: vec4<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> color: vec4<f32>;
 
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment

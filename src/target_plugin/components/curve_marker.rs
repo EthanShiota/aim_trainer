@@ -11,7 +11,7 @@ use bevy::{
 
 use crate::{
     AppState, GameState,
-    target_plugin::{DebugMode, Target},
+    target_plugin::{DebugMode, Target, target_material::TargetMaterial},
 };
 
 pub struct CurvePlugin;
@@ -56,7 +56,7 @@ fn tick_curve_marker(
     mut q_curve_marker: Query<(Entity, &mut CurveMarker)>,
     mut animation_clips: ResMut<Assets<AnimationClip>>,
     mut animation_graphs: ResMut<Assets<AnimationGraph>>,
-    time: Res<Time<Real>>,
+    time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
     for (ent, mut curve_marker) in q_curve_marker.iter_mut() {
@@ -68,10 +68,11 @@ fn tick_curve_marker(
             // show curve
 
             // Construct polyline3d using samples
-            let samples = curve_marker.curve.samples(100).unwrap();
+            let samples = curve_marker.curve.samples(600).unwrap();
             let polyline = Polyline3d::new(samples);
 
             let mesh = polyline.mesh().build();
+            // TODO: new line material
             commands.entity(ent).apply_scene(bsn! {
                 Mesh3d(asset_value(mesh))
                 MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial{unlit: true, ..StandardMaterial::from_color(GREEN_400)}))
@@ -82,7 +83,7 @@ fn tick_curve_marker(
             info!("Curve Visual Spawned!");
         }
 
-        // Spawns curve
+        // INFO: Spawns curve
         if curve_marker.lifetime.just_finished() {
             let mut clip = AnimationClip::default();
             let curve = AnimatableCurve::new(
@@ -101,17 +102,19 @@ fn tick_curve_marker(
             let mut player = AnimationPlayer::default();
             player.start(animation_node_index);
 
-            let mut slider = commands.spawn_scene(bsn! {
-                Mesh3d(asset_value(Sphere::new(3.)))
-                MeshMaterial3d::<StandardMaterial>(asset_value(StandardMaterial{ unlit: true, ..StandardMaterial::from_color(RED_100)}))
-                Transform {
-                    translation: {curve_marker.curve.sample_unchecked(0.)}
-                }
-                DespawnOnExit::<AppState>(AppState::InGame)
-                template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
-                template_value(player)
-                AnimationGraphHandle(asset_value(animation_graph))
-            }).id();
+            let mut slider = commands
+                .spawn_scene(bsn! {
+                    Mesh3d(asset_value(Sphere::new(2.)))
+                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into()}))
+                    Transform {
+                        translation: {curve_marker.curve.sample_unchecked(0.)}
+                    }
+                    DespawnOnExit::<AppState>(AppState::InGame)
+                    template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
+                    template_value(player)
+                    AnimationGraphHandle(asset_value(animation_graph))
+                })
+                .id();
 
             commands
                 .entity(slider)

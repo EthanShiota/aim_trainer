@@ -122,8 +122,8 @@ fn main() {
         )
         // INFO: Setup main menu
         // .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
-        .add_systems(OnEnter(GameState::Paused), pause_transition)
-        .add_systems(OnEnter(GameState::Playing), play_transition)
+        .add_systems(OnEnter(GameState::Paused), transition::pause)
+        .add_systems(OnEnter(GameState::Playing), transition::play)
         .add_systems(
             Update,
             (
@@ -281,10 +281,8 @@ fn music_controls(
                 *should_resume = !sink.is_paused();
                 sink.pause();
             }
-            if slider.drag_stopped() {
-                if *should_resume {
-                    sink.play();
-                }
+            if slider.drag_stopped() && *should_resume {
+                sink.play();
             }
         }
     });
@@ -379,7 +377,7 @@ fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> R
     egui::Window::new("Beatmap Debug Inspector").show(contexts.ctx_mut()?, |ui| {
         if let Some(beat_map) = beat_map {
             let mut songs = beat_map.target_markers.clone();
-            songs.sort_by_key(|v| v.0.0);
+            songs.sort_by_key(|v| v.0.0.duration());
             egui::ScrollArea::new([false, true])
                 .max_height(400.)
                 .show(ui, |ui| {
@@ -394,52 +392,56 @@ fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> R
     });
     Ok(())
 }
-fn play_transition(
-    mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
-    mut grab_mode: ResMut<GrabMouse>,
-    mut time: ResMut<Time<Virtual>>,
-) {
-    time.unpause();
-    cursor_options.grab_mode = CursorGrabMode::Locked;
-    cursor_options.visible = false;
-    **grab_mode = true;
-}
-fn pause_transition(
-    mut commands: Commands,
-    mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
-    mut grab_mode: ResMut<GrabMouse>,
-    mut time: ResMut<Time<Virtual>>,
-) {
-    time.pause();
-    **grab_mode = false;
-    cursor_options.grab_mode = CursorGrabMode::None;
-    cursor_options.visible = true;
-    commands.spawn_scene(bsn! {
-        Node {
-            display: Display::Flex, justify_content: JustifyContent::Center, align_items: AlignItems::Center, width: percent(100.), height: percent(100.)
-        }
-        DespawnOnExit::<GameState>(GameState::Paused)
-        Children [
-            Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
+pub mod transition {
+    use super::*;
+
+    pub fn play(
+        mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
+        mut grab_mode: ResMut<GrabMouse>,
+        mut time: ResMut<Time<Virtual>>,
+    ) {
+        time.unpause();
+        cursor_options.grab_mode = CursorGrabMode::Locked;
+        cursor_options.visible = false;
+        **grab_mode = true;
+    }
+    pub fn pause(
+        mut commands: Commands,
+        mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
+        mut grab_mode: ResMut<GrabMouse>,
+        mut time: ResMut<Time<Virtual>>,
+    ) {
+        time.pause();
+        **grab_mode = false;
+        cursor_options.grab_mode = CursorGrabMode::None;
+        cursor_options.visible = true;
+        commands.spawn_scene(bsn! {
+            Node {
+                display: Display::Flex, justify_content: JustifyContent::Center, align_items: AlignItems::Center, width: percent(100.), height: percent(100.)
+            }
+            DespawnOnExit::<GameState>(GameState::Paused)
+                Children [
+                Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
             BorderColor::all(css::BLACK)
-            Children [
-            (
-                Node {width: percent(100.), align_items: AlignItems::Center}
-                on(|_: On<Pointer<Press>>, mut commands: Commands| {
-                    commands.set_state(GameState::Playing);
-                })
-                Text::new("Exit")
-            ),
-            (
-                Node {width: percent(100.), align_items: AlignItems::Center}
-                on(|_: On<Pointer<Press>>, mut commands: Commands| {
-                    commands.set_state(AppState::Menu);
-                })
-                Text::new("Main Menu")
-            )
-            ]
-        ]
-    });
+                Children [
+                (
+                    Node {width: percent(100.), align_items: AlignItems::Center}
+                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
+                        commands.set_state(GameState::Playing);
+                    })
+                    Text::new("Exit")
+                ),
+                (
+                    Node {width: percent(100.), align_items: AlignItems::Center}
+                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
+                        commands.set_state(AppState::Menu);
+                    })
+                    Text::new("Main Menu")
+                )
+                ]
+                ]
+        });
+    }
 }
 
 fn score_ui() -> impl Scene {
@@ -531,7 +533,7 @@ fn light_and_cameras(
             ..default()
         },
         Transform::from_xyz(0., 5., 0.),
-        PlayerCamera::default(),
+        PlayerCamera,
         FPSCamera::default(),
         DespawnOnExit(AppState::InGame),
     ));

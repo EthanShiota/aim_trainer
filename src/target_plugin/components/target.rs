@@ -62,7 +62,8 @@ pub fn destroy_hit_targets(
             Target::Duration(duration) => {
                 // HACK: use system delta to approximate time on target
                 let time_on_target = time.delta();
-                info!("hit {:?} {:?}", time_on_target, duration);
+
+                info!("hit registered {:?} {:?}", time_on_target, duration);
                 *duration = duration.saturating_sub(time_on_target);
                 if !duration.is_zero() {
                     continue;

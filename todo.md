@@ -8,6 +8,7 @@
 - [x] Return to menu
 - [ ] Scoring
 - [ ] Approach Window
+- [ ] auto play showcase mode
 
 ## Visuals
 
@@ -23,3 +24,6 @@
 ## Bugs
 
 - [ ] Spawn timings are not correct I think
+
+
+Better logs

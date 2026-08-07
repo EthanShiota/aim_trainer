@@ -2,7 +2,7 @@ use bevy::{color::palettes::css::WHITE, prelude::*};
 
 use crate::{
     AppState, AudioBuffer,
-    target_plugin::{CurveMarker, TargetMarker},
+    target_plugin::{CurveMarker, TargetMarker, components::timing_ring::TimingRing},
 };
 #[derive(Resource)]
 pub struct BeatMap {
@@ -29,8 +29,8 @@ impl BeatMap {
             commands.spawn((
                 target,
                 transform,
-                Mesh3d(mesh.clone()),
-                MeshMaterial3d(mat.clone()),
+                // Mesh3d(mesh.clone()),
+                // MeshMaterial3d(mat.clone()),
                 Visibility::Hidden,
                 DespawnOnExit(AppState::InGame),
             ));

@@ -25,7 +25,7 @@ use crate::{
 use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
 
 fn linear_curve(points: Vec<Vec2>, curve_duration: f32, slides: usize) -> SampleAutoCurve<Vec3> {
-    let linear_curve = points
+    points
         .array_windows::<2>()
         .map(|&s| {
             let c = LinearSpline::new(s)
@@ -51,9 +51,7 @@ fn linear_curve(points: Vec<Vec2>, curve_duration: f32, slides: usize) -> Sample
         .repeat(slides)
         .unwrap()
         .resample_auto(100 * slides)
-        .unwrap();
-
-    linear_curve
+        .unwrap()
 }
 struct BeatMapDecoderState {
     target_points: Vec<(TargetMarker, Transform)>,
@@ -155,20 +153,19 @@ pub fn osu(
         |mut state, hit_obj| {
             let t = hit_obj.time;
 
-            if t > (state.previous_timing_point as usize) {
-                if let Some(next_timing_point) = state.timing_point_iter.peek() {
-                    if t >= next_timing_point.time as usize {
-                        // apply next timing point
-                        if next_timing_point.uninherited {
-                            state.beat_length = next_timing_point.beat_length;
-                        } else {
-                            // slider velocity
-                            state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
-                        }
-                        state.previous_timing_point = next_timing_point.time;
-                        state.timing_point_iter.next();
-                    }
+            if t > (state.previous_timing_point as usize)
+                && let Some(next_timing_point) = state.timing_point_iter.peek()
+                && t >= next_timing_point.time as usize
+            {
+                // apply next timing point
+                if next_timing_point.uninherited {
+                    state.beat_length = next_timing_point.beat_length;
+                } else {
+                    // slider velocity
+                    state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
                 }
+                state.previous_timing_point = next_timing_point.time;
+                state.timing_point_iter.next();
             }
 
             if let Some(curve_params) = hit_obj.object_params.clone() {
@@ -181,7 +178,7 @@ pub fn osu(
 
                 assert!(slides >= 1);
                 let points: Vec<_> = std::iter::once(hit_obj.position)
-                    .chain(curve_points.into_iter())
+                    .chain(curve_points)
                     .map(|p| vec2(p.x as f32, p.y as f32))
                     .collect();
 
@@ -201,7 +198,7 @@ pub fn osu(
                                 Interval::new(0., curve_duration / slides as f32).unwrap(),
                             )
                             .unwrap()
-                            .map(|p| convert_osu_to_world(p))
+                            .map(convert_osu_to_world)
                             .ping_pong()
                             .unwrap()
                             .repeat(slides)
@@ -268,7 +265,7 @@ pub fn osu(
                 }
             } else {
                 state.target_points.push((
-                    TargetMarker(Duration::from_millis(t as u64)),
+                    TargetMarker(Timer::new(Duration::from_millis(t as u64), TimerMode::Once)),
                     Transform::from_translation(convert_osu_to_world(to_vec2(hit_obj.position))),
                 ));
             }
@@ -323,7 +320,8 @@ fn points_to_bezier(points: Vec<Vec2>) -> FunctionCurve<Vec2, impl Fn(f32) -> Ve
                 }
                 beta[0]
             });
-            info!("{:?}", c.samples(10).unwrap().collect::<Vec<_>>());
+
+            // Approx distance with linear segments
             let samples = c.samples(100).unwrap().collect::<Vec<_>>();
             let length = samples
                 .clone()

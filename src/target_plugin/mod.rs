@@ -35,6 +35,7 @@ impl Plugin for TargetPlugin {
             // INFO: Target Material
             .add_plugins(MaterialPlugin::<TargetMaterial>::default())
             .add_plugins(CurvePlugin)
+            .add_plugins(TimingRingPlugin)
             // INFO: Gizmo
             .insert_gizmo_config(
                 SpawnerGizmo,
@@ -80,8 +81,8 @@ impl Plugin for TargetPlugin {
             .on_add(|mut world, context| {
                 let ent = world.entity(context.entity);
 
+                // Takes mesh attached to spawner and processes into a spawner volume
                 if let Ok(mesh) = ent.get_components::<&Mesh3d>() {
-                    log::info!("mesh!");
                     let triangles = world
                         .get_resource::<Assets<Mesh>>()
                         .and_then(|a| a.get(mesh.0.id()))
