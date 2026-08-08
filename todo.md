@@ -7,12 +7,12 @@
 - [x] Proper map select
 - [x] Return to menu
 - [ ] Scoring
-- [ ] Approach Window
+- [x] Approach Window
 - [ ] auto play showcase mode
 
 ## Visuals
 
-- [ ] Hit Leadup
+- [x] Hit Leadup
 - [ ] Highlight next target
 
 ## Settings
@@ -22,8 +22,6 @@
 - [ ] save settings somewhere
 
 ## Bugs
-
-- [ ] Spawn timings are not correct I think
 
 
 Better logs

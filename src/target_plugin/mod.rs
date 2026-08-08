@@ -1,21 +1,26 @@
+use std::f32::consts::PI;
+
 use bevy::{
     camera::visibility::RenderLayers, input::common_conditions::input_just_pressed, prelude::*,
 };
 mod components;
 mod target_material;
 pub use components::*;
-use target_material::TargetMaterial;
+pub use target_material::TargetMaterial;
 
 #[derive(Resource, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct DebugMode(pub bool);
 
 #[derive(Resource)]
 pub struct TargetResource {
+    // base target mesh
     pub mesh: Handle<Mesh>,
-    pub material: Handle<TargetMaterial>,
+    pub ring_start: f32,
+    pub ring_end: f32,
+    pub easing: EasingCurve<f32>,
 }
 
-use crate::{AppState, GameState};
+use crate::{AppState, GameState, target_plugin};
 
 pub struct TargetPlugin;
 
@@ -64,17 +69,19 @@ impl Plugin for TargetPlugin {
             // INFO: Handle target hit
             .add_systems(
                 Update,
-                (handle_fire_weapon, destroy_hit_targets).run_if(in_state(AppState::InGame)),
+                (
+                    handle_fire_weapon,
+                    destroy_hit_targets,
+                    components::target::tick,
+                )
+                    .run_if(in_state(AppState::InGame)),
             )
             // INFO: Spawner Debug
             .add_systems(
                 Update,
                 (draw_spawners).run_if(resource_equals(DebugMode(true))),
             )
-            .add_systems(
-                Update,
-                tick_target_marker.run_if(in_state(GameState::Playing)),
-            )
+            .add_systems(Update, tick.run_if(in_state(GameState::Playing)))
             .add_systems(Update, spawner_loop.run_if(in_state(SpawnerState::Active)))
             .world_mut()
             .register_component_hooks::<TargetSpawner>()
@@ -107,8 +114,8 @@ fn setup_plugin(
 ) {
     commands.insert_resource(TargetResource {
         mesh: meshes.add(Sphere::new(2.)),
-        material: materials.add(TargetMaterial {
-            color: LinearRgba::RED * 10.,
-        }),
+        ring_start: 0.,
+        ring_end: PI / 2.,
+        easing: EasingCurve::new(0., 1., EaseFunction::CubicIn),
     });
 }

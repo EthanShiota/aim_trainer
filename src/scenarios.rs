@@ -167,6 +167,21 @@ pub fn osu(
                 state.previous_timing_point = next_timing_point.time;
                 state.timing_point_iter.next();
             }
+            let ar = osu_beat_map.difficulty.approach_rate;
+
+            // INFO: preempt calculation
+            // AR < 5: preempt = 1200ms + 120ms * (5 - AR)
+            // AR = 5: preempt = 1200ms
+            // AR > 5: preempt = 1200ms - 150ms * (AR - 5)
+            let preempt_ms = match ar {
+                ar if (0. ..5.).contains(&ar) => 1200. + 120. * (5. - ar),
+                ar if ar > 5. && ar <= 10. => 1200. - 150. * (ar - 5.),
+                5. => 1200.,
+                err => {
+                    error!("approach rate must be [0,10] -> {ar}");
+                    1200.
+                }
+            };
 
             if let Some(curve_params) = hit_obj.object_params.clone() {
                 let SliderParams {
@@ -211,6 +226,7 @@ pub fn osu(
                             // truncated to nearest millisecond
                             duration: curve_duration,
                             lifetime: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
+                            preempt: Duration::from_millis(preempt_ms as u64),
                         });
                     }
                     parser::CurveType::CentripetalCatmullRom => todo!(),
@@ -220,6 +236,8 @@ pub fn osu(
                             curve,
                             duration: curve_duration,
                             lifetime: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
+
+                            preempt: Duration::from_millis(preempt_ms as u64),
                         });
                     }
                     parser::CurveType::PerfectCircle => {
@@ -260,12 +278,21 @@ pub fn osu(
                             curve,
                             duration: curve_duration,
                             lifetime: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
+                            preempt: Duration::from_millis(preempt_ms as u64),
                         });
                     }
                 }
             } else {
+                // Push target into beat_map
                 state.target_points.push((
-                    TargetMarker(Timer::new(Duration::from_millis(t as u64), TimerMode::Once)),
+                    TargetMarker {
+                        time: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
+                        // TODO: Calculate preempt
+                        preempt: Timer::new(
+                            Duration::from_millis(preempt_ms as u64),
+                            TimerMode::Once,
+                        ),
+                    },
                     Transform::from_translation(convert_osu_to_world(to_vec2(hit_obj.position))),
                 ));
             }

@@ -2,12 +2,17 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 
+use crate::target_plugin::{TargetMaterial, TargetResource};
+
 // Marker component for targets
 #[derive(Component, Copy, Clone)]
 pub enum Target {
     Counter(usize),
     Duration(Duration),
 }
+
+#[derive(Component, Default, Clone)]
+pub struct FadeIn(pub Timer);
 
 impl Default for Target {
     fn default() -> Self {
@@ -24,6 +29,22 @@ pub struct TargetDestroyed;
 #[derive(Message)]
 pub struct FireWeapon(pub Transform);
 
+pub fn tick(
+    mut mats: ResMut<Assets<TargetMaterial>>,
+    mut q_target: Query<(&mut FadeIn, &MeshMaterial3d<TargetMaterial>)>,
+    target_resource: Res<TargetResource>,
+    time: Res<Time<Virtual>>,
+) {
+    let dt = time.delta();
+    for (mut fade_in, mat) in q_target.iter_mut() {
+        fade_in.0.tick(dt);
+        if let Some(mut m) = mats.get_mut(mat) {
+            m.ring = target_resource
+                .easing
+                .sample_unchecked(fade_in.0.fraction());
+        }
+    }
+}
 pub fn handle_fire_weapon(
     mut ray_cast: MeshRayCast,
     mut target_hit: MessageWriter<TargetHit>,
@@ -51,7 +72,10 @@ pub fn destroy_hit_targets(
 ) {
     for TargetHit(entity) in target_hit.read() {
         let mut ent = commands.entity(*entity);
-        let mut target = q_target.get_mut(ent.id()).unwrap();
+        let Ok(mut target) = q_target.get_mut(ent.id()) else {
+            // skip case where target is despawned before commands queue
+            continue;
+        };
         match target.as_mut() {
             Target::Counter(count) => {
                 *count -= 1;
@@ -83,9 +107,8 @@ pub fn destroy_hit_targets(
             .delayed()
             .secs(2.)
             .get_entity(*entity)
-            .and_then(|mut e| {
+            .map(|mut e| {
                 e.despawn();
-                Ok(())
             });
         commands.trigger(TargetDestroyed);
     }

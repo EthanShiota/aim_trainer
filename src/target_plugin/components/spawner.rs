@@ -1,7 +1,10 @@
-use crate::target_plugin::TargetResource;
+use crate::target_plugin::{TargetMaterial, TargetResource};
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{
+    color::palettes::{css::WHITE_SMOKE, tailwind::RED_800},
+    prelude::*,
+};
 
 use crate::PlayerCamera;
 
@@ -58,14 +61,18 @@ pub fn debug_spawn_target(
     target_res: Res<TargetResource>,
     player_camera_transform: Single<&Transform, With<PlayerCamera>>,
 ) {
-    commands.spawn((
-        Mesh3d(target_res.mesh.clone()),
-        MeshMaterial3d(target_res.material.clone()),
-        Target::default(),
-        player_camera_transform.with_translation(
-            player_camera_transform.translation + *player_camera_transform.forward() * 40.,
-        ),
-    ));
+    commands.spawn_scene(bsn! {
+        Mesh3d({target_res.mesh.clone()})
+        MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {
+            color: RED_800.into(),
+            ring: 1.,
+            ring_width: 0.1,
+        }))
+        Target
+        template_value(player_camera_transform.with_translation(
+            player_camera_transform.translation + *player_camera_transform.forward() * 40.
+        ))
+    });
 }
 
 pub fn spawner_loop(
@@ -94,13 +101,19 @@ pub fn spawner_loop(
                 SpawnerVolumeMode::SampleBoundary => vol.sample_boundary(&mut rand::rng()),
             } + transform.translation;
 
-            commands.entity(entity).with_child((
-                Target::Counter(1),
-                Visibility::Visible,
-                Transform::from_translation(target_translation),
-                Mesh3d(target_res.mesh.clone()),
-                MeshMaterial3d(target_res.material.clone()),
-            ));
+            commands.entity(entity).with_children(|c| {
+                c.commands().spawn_scene(bsn! {
+                    template_value(Target::Counter(1))
+                    template_value(Visibility::Visible)
+                    Transform::from_translation(target_translation)
+                    Mesh3d({target_res.mesh.clone()})
+                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {
+                        color: WHITE_SMOKE.into(),
+                        ring: 1.,
+                        ring_width: 0.1,
+                    }))
+                });
+            });
         }
     }
 }

@@ -7,7 +7,11 @@
 #import bevy_render::view::direction_view_to_world;
 #import bevy_render::maths
 
+const TAU: f32 = 6.28318530718;
+
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> color: vec4<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(101) var<uniform> ring: f32;
+@group(#{MATERIAL_BIND_GROUP}) @binding(102) var<uniform> ring_width: f32;
 
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment
@@ -31,16 +35,22 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let dist = distance(viewport_uv * normalize(view.viewport.zw), vec2(0.0, 0.0));
     let angle = acos(dot(normalize(look_vector), normalize(obj_vector)));
-    // var flash = vec4<f32>(0.0);
-    // if dist < 0.1 {
-    //   flash = vec4(sin(floor(2. - 2. * log(10. * dist)) + 10. *globals.time), 0.0, 0.0,0.0);
-    // }
+
+    // Indicator ring
+    let obj_angle = acos(dot(normalize(normal), normalize(obj_vector)));
+
+    let ring_lower = ring - ring_width;
+    let ring_upper = ring + ring_width;
+    let modifier = smoothstep(ring_lower, ring, obj_angle) - smoothstep(ring, ring_upper, obj_angle);
 
     // 3. Return the Final Color
     // The final output of a fragment shader must be a `vec4<f32>` representing
     // an RGBA color. We construct our output by taking our calculated RGB `vec3`
     // and adding a fixed alpha component of 1.0 for full opacity.
     // return vec4<f32>(color, 1.0) 
-    return (vec4<f32>(0.0, 0.0, 0.0, 1.0) + rimlight * color);
+    //
+    let color_ring = vec4f(normalize(color.xyz) * modifier, 0.0);
+    let final_color = vec4<f32>(0.0, 0.0, 0.0, modifier) + color_ring + rimlight * color;
+    return final_color;
 }
 

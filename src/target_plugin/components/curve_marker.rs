@@ -10,8 +10,7 @@ use bevy::{
 };
 
 use crate::{
-    AppState, GameState,
-    target_plugin::{DebugMode, Target, target_material::TargetMaterial},
+    AppState, GameState, target_plugin::{DebugMode, Target, target::FadeIn, target_material::TargetMaterial},
 };
 
 pub struct CurvePlugin;
@@ -35,6 +34,7 @@ pub struct CurveMarker {
     pub duration: f32,
     // Spawns curve when duration is zero
     pub lifetime: Timer,
+    pub preempt: Duration,
 }
 
 #[derive(GizmoConfigGroup, Default, Reflect)]
@@ -62,8 +62,7 @@ fn tick_curve_marker(
     for (ent, mut curve_marker) in q_curve_marker.iter_mut() {
         curve_marker.lifetime.tick(time.delta());
 
-        // TODO: Use correct approach window
-        let approach_window = Duration::from_secs_f32(1.);
+        let approach_window = curve_marker.preempt;
         if (curve_marker.lifetime.remaining().abs_diff(approach_window)) <= time.delta() {
             // show curve
 
@@ -80,6 +79,18 @@ fn tick_curve_marker(
                 //     translation: {curve_marker.curve.sample(0.).unwrap()}
                 // }
             });
+            let hint = commands.spawn_scene(
+                bsn! {
+                    Mesh3d(asset_value(Sphere::new(2.)))
+                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ring_width: 0.3}))
+                    
+                    FadeIn({Timer::new(curve_marker.preempt, TimerMode::Once)})
+                    Transform {
+                        translation: {curve_marker.curve.sample_unchecked(0.)}
+                    }
+                }
+            ).id();
+            commands.delayed().duration(curve_marker.preempt).entity(hint).despawn();
             info!("Curve Visual Spawned!");
         }
 
@@ -105,7 +116,7 @@ fn tick_curve_marker(
             let mut slider = commands
                 .spawn_scene(bsn! {
                     Mesh3d(asset_value(Sphere::new(2.)))
-                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into()}))
+                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ring_width: 0.1}))
                     Transform {
                         translation: {curve_marker.curve.sample_unchecked(0.)}
                     }

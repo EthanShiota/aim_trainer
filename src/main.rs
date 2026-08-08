@@ -9,6 +9,7 @@ use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
+use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
@@ -32,7 +33,7 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 use target_plugin::FireWeapon;
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
-use crate::target_plugin::{BeatMap, Target, TargetDestroyed};
+use crate::target_plugin::{BeatMap, Target, TargetDestroyed, TargetMaterial, TargetResource};
 
 #[derive(Resource, Default, Clone, Copy)]
 struct GameStats {
@@ -373,18 +374,23 @@ fn update_ui(stats: Option<Res<GameStats>>, text: Populated<&mut Text, With<Scor
     }
 }
 
-fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> Result {
+fn debug_window(
+    mut contexts: EguiContexts,
+    beat_map: Option<Res<BeatMap>>,
+    target_res: Option<ResMut<TargetResource>>,
+    mut target_mat: ResMut<Assets<TargetMaterial>>,
+) -> Result {
     egui::Window::new("Beatmap Debug Inspector").show(contexts.ctx_mut()?, |ui| {
         if let Some(beat_map) = beat_map {
             let mut songs = beat_map.target_markers.clone();
-            songs.sort_by_key(|v| v.0.0.duration());
+            songs.sort_by_key(|v| v.0.time.duration());
             egui::ScrollArea::new([false, true])
                 .max_height(400.)
                 .show(ui, |ui| {
                     for (duration, transform) in songs {
                         ui.label(format!(
                             "time: {:?} position: {:?}",
-                            duration.0, transform.translation
+                            duration.time, transform.translation
                         ));
                     }
                 });
