@@ -1,4 +1,7 @@
 use bevy::prelude::*;
 
-#[derive(Event)]
-pub struct TargetDestroyed;
+#[derive(EntityEvent)]
+pub struct TargetDestroyed(pub Entity);
+
+#[derive(EntityEvent)]
+pub struct TargetHit(pub Entity);

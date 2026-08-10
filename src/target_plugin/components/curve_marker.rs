@@ -10,7 +10,7 @@ use bevy::{
 };
 
 use crate::{
-    AppState, GameState, target_plugin::{DebugMode, Target, target::FadeIn, target_material::TargetMaterial},
+    AppState, GameState, target_plugin::{DebugMode, Target, TargetResource, events::TargetHit, target::FadeIn, target_material::TargetMaterial},
 };
 
 pub struct CurvePlugin;
@@ -56,6 +56,7 @@ fn tick_curve_marker(
     mut q_curve_marker: Query<(Entity, &mut CurveMarker)>,
     mut animation_clips: ResMut<Assets<AnimationClip>>,
     mut animation_graphs: ResMut<Assets<AnimationGraph>>,
+    mut target_resource: Res<TargetResource>,
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
@@ -79,9 +80,10 @@ fn tick_curve_marker(
                 //     translation: {curve_marker.curve.sample(0.).unwrap()}
                 // }
             });
+
             let hint = commands.spawn_scene(
                 bsn! {
-                    Mesh3d(asset_value(Sphere::new(2.)))
+                    Mesh3d({target_resource.mesh.clone()})
                     MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ring_width: 0.3}))
                     
                     FadeIn({Timer::new(curve_marker.preempt, TimerMode::Once)})
@@ -111,11 +113,9 @@ fn tick_curve_marker(
                 AnimationGraph::from_clip(animation_clips.add(clip));
 
             let mut player = AnimationPlayer::default();
-            player.start(animation_node_index);
-
             let mut slider = commands
                 .spawn_scene(bsn! {
-                    Mesh3d(asset_value(Sphere::new(2.)))
+                    Mesh3d({target_resource.mesh.clone()})
                     MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ring_width: 0.1}))
                     Transform {
                         translation: {curve_marker.curve.sample_unchecked(0.)}
@@ -124,6 +124,12 @@ fn tick_curve_marker(
                     template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
                     template_value(player)
                     AnimationGraphHandle(asset_value(animation_graph))
+                }).observe(move |e: On<TargetHit>, mut q_player: Query<&mut AnimationPlayer>, mut commands: Commands| {
+                    
+                    if let Ok(mut p) = q_player.get_mut(e.event_target()) {
+                        p.start(animation_node_index);
+                    }
+                    commands.entity(e.observer()).despawn();
                 })
                 .id();
 

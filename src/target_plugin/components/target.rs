@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use crate::AppState;
+use crate::scoreing::Score;
+use crate::target_plugin::events::TargetHit;
 use crate::target_plugin::messages::*;
 use crate::{fps_camera::Hovered, target_plugin::events::TargetDestroyed};
 use bevy::{
@@ -42,111 +45,46 @@ pub fn tick(
     }
 }
 
-pub fn handle_fire_weapon(
-    mut target_hit: MessageWriter<TargetHit>,
-    mut target_hit_delta: MessageWriter<TargetHitDelta>,
-    mut fire_weapon: MessageReader<FireWeapon>,
-    mut fire_weapon_held: MessageReader<FireWeaponHeld>,
-    q_hits: Query<(Entity, &Hovered), With<Target>>,
+pub fn on_target_hit(
+    e: On<TargetHit>,
+    mut commands: Commands,
+    mut q_target: Query<(Entity, &mut Target)>,
+    mut score: ResMut<Score>,
+    time: Res<Time<Virtual>>,
 ) {
-    let hits = q_hits
-        .into_iter()
-        .sort_by_key::<&Hovered, _>(|hover| hover.0)
-        .collect::<Vec<_>>();
-    for _ in fire_weapon.read() {
-        for (entity, Hovered(_)) in hits.iter().take(1) {
-            target_hit.write(TargetHit(*entity));
-        }
-    }
+    if let Ok((ent, mut target)) = q_target.get_mut(e.event_target()) {
+        // Update State
+        let should_destroy = match target.as_mut() {
+            Target::Counter(count) => {
+                *count -= 1;
+                score.points += 1;
+                *count == 0
+            }
+            Target::Duration(duration) => {
+                *duration = duration.saturating_sub(time.delta());
+                score.points += 1;
+                duration.is_zero()
+            }
+        };
 
-    for FireWeaponHeld { delta } in fire_weapon_held.read() {
-        for (entity, Hovered(_)) in hits.iter().take(1) {
-            target_hit_delta.write(TargetHitDelta((*entity, *delta)));
+        // Destroy target
+        if should_destroy {
+            commands.entity(ent).trigger(TargetDestroyed);
         }
     }
 }
 
-pub fn destroy_hit_targets(
-    mut target_hit: PopulatedMessageReader<TargetHit>,
-    mut target_hit_delta: MessageReader<TargetHitDelta>,
-    mut q_target: Query<&mut Target>,
+pub fn on_target_destroyed(
+    e: On<TargetDestroyed>,
     mut commands: Commands,
-    mut target_material: ResMut<Assets<TargetMaterial>>,
-    q_target_material: Query<&MeshMaterial3d<TargetMaterial>>,
-    asset_server: ResMut<AssetServer>,
-    time: Res<Time<Real>>,
+    q_transform: Query<&Transform>,
 ) {
-    for TargetHit(entity) in target_hit.read() {
-        let mut ent = commands.entity(*entity);
-        let Ok(mut target) = q_target.get_mut(ent.id()) else {
-            // skip case where target is despawned before commands queue
-            continue;
-        };
-        match target.as_mut() {
-            Target::Counter(count) => {
-                *count -= 1;
-                if *count != 0 {
-                    continue;
-                }
-            }
-            Target::Duration(duration) => {
-                // HACK: use system delta to approximate time on target
-                let time_on_target = time.delta();
-
-                info!("hit registered {:?} {:?}", time_on_target, duration);
-                *duration = duration.saturating_sub(time_on_target);
-                if !duration.is_zero() {
-                    continue;
-                }
-            }
-        }
-
-        // Destroy hit target
-
-        ent.remove::<Mesh3d>();
-        // TODO: Sound effect handling
-        commands
-            .entity(*entity)
-            .insert(AudioPlayer::new(asset_server.load("audio/Creams.ogg")));
-
-        _ = commands
-            .delayed()
-            .secs(2.)
-            .get_entity(*entity)
-            .map(|mut e| {
-                e.try_despawn();
-            });
-        commands.trigger(TargetDestroyed);
+    if let Ok(&t) = q_transform.get(e.event_target()) {
+        commands.spawn_scene(bsn! {
+            AudioPlayer("audio/Creams.ogg")
+            template_value(t)
+            DespawnOnExit::<AppState>(AppState::InGame)
+        });
     }
-
-    for TargetHitDelta((entity, delta)) in target_hit_delta.read() {
-        let ent = commands.entity(*entity);
-        let Ok(mut target) = q_target.get_mut(ent.id()) else {
-            // skip case where target is despawned before commands queue
-            continue;
-        };
-        match target.as_mut() {
-            Target::Counter(count) => {
-                // *count -= 1;
-                if *count != 0 {
-                    continue;
-                }
-            }
-            Target::Duration(duration) => {
-                let time_on_target = *delta;
-
-                *duration = duration.saturating_sub(time_on_target);
-
-                if let Ok(h_mat) = q_target_material.get(*entity)
-                    && let Some(mut mat) = target_material.get_mut(h_mat.id())
-                {
-                    mat.color = BLUE_VIOLET.into();
-                }
-
-                if !duration.is_zero() {
-                    continue;
-                }
-            }
-        }
-    }
+    commands.entity(e.event_target()).despawn();
 }

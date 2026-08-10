@@ -33,8 +33,8 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
 use target_plugin::messages::{FireWeapon, FireWeaponHeld};
 
-use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
-use crate::target_plugin::events::TargetDestroyed;
+use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
+use crate::target_plugin::events::{TargetDestroyed, TargetHit};
 use crate::target_plugin::{BeatMap, Target, TargetMaterial, TargetResource};
 
 #[derive(Resource, Clone, Copy)]
@@ -497,14 +497,28 @@ fn light_and_cameras(
     ));
 }
 
-fn fire_weapon(mut fire_weapon: MessageWriter<FireWeapon>) {
-    fire_weapon.write(FireWeapon);
+fn fire_weapon(q_hit: Query<(Entity, &Hovered), With<Target>>, mut commands: Commands) {
+    let mut hits: Vec<_> = q_hit.into_iter().collect();
+    if hits.len() > 1 {
+        info!("{:?}", hits.iter().map(|(_, h)| h.0).collect::<Vec<_>>());
+    }
+    hits.sort_by_key(|(_, h)| h.0);
+    if let Some((t, _)) = hits.first() {
+        commands.entity(*t).trigger(TargetHit);
+    }
 }
 
-fn fire_weapon_held(mut fire_weapon: MessageWriter<FireWeaponHeld>, time: Res<Time<Virtual>>) {
-    fire_weapon.write(FireWeaponHeld {
-        delta: time.delta(),
-    });
+fn fire_weapon_held(q_hit: Query<(Entity, &Target, &Hovered)>, mut commands: Commands) {
+    let mut hits: Vec<_> = q_hit.into_iter().collect();
+    if hits.len() > 1 {
+        info!("{:?}", hits.iter().map(|(_, _, h)| h.0).collect::<Vec<_>>());
+    }
+    hits.sort_by_key(|(_, _, h)| h.0);
+    if let Some((e, t, _)) = hits.first()
+        && let Target::Duration(_) = t
+    {
+        commands.entity(*e).trigger(TargetHit);
+    }
 }
 
 fn toggle_fullscreen(

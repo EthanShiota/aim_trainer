@@ -66,19 +66,13 @@ impl Plugin for TargetPlugin {
                 ),
             )
             // INFO: Messages
-            .add_message::<messages::TargetHit>()
             .add_message::<messages::TargetHitDelta>()
             .add_message::<messages::FireWeapon>()
             .add_message::<messages::FireWeaponHeld>()
             // INFO: Handle target hit
             .add_systems(
                 Update,
-                (
-                    handle_fire_weapon,
-                    destroy_hit_targets,
-                    components::target::tick,
-                    target_material::tick,
-                )
+                (components::target::tick, target_material::tick)
                     .run_if(in_state(AppState::InGame)),
             )
             // INFO: Spawner Debug
@@ -88,6 +82,9 @@ impl Plugin for TargetPlugin {
             )
             .add_systems(Update, tick.run_if(in_state(GameState::Playing)))
             .add_systems(Update, spawner_loop.run_if(in_state(SpawnerState::Active)))
+            // INFO: Target Events
+            .add_observer(on_target_destroyed)
+            .add_observer(on_target_hit)
             .world_mut()
             .register_component_hooks::<TargetSpawner>()
             .on_add(|mut world, context| {
