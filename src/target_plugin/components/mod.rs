@@ -5,7 +5,7 @@ mod spawner_volume;
 pub mod target;
 mod target_marker;
 mod timing_ring;
-pub use beat_map::*;
+pub use beat_map::BeatMap;
 pub use curve_marker::{CurveGizmo, CurveMarker, CurvePlugin};
 pub use spawner::*;
 pub use spawner_volume::*;

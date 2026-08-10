@@ -1,4 +1,5 @@
 mod edit_mode;
+mod effects;
 mod fps_camera;
 mod materials;
 mod menus;
@@ -9,7 +10,6 @@ use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
-use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
@@ -33,6 +33,7 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 use target_plugin::FireWeapon;
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
+use crate::target_plugin::target::FireWeaponHeld;
 use crate::target_plugin::{BeatMap, Target, TargetDestroyed, TargetMaterial, TargetResource};
 
 #[derive(Resource, Default, Clone, Copy)]
@@ -321,6 +322,8 @@ fn playing(
 
     if mouse_input.just_pressed(MouseButton::Left) {
         commands.run_system_cached(fire_weapon);
+    } else if mouse_input.pressed(MouseButton::Left) {
+        commands.run_system_cached(fire_weapon_held);
     }
 }
 
@@ -562,6 +565,17 @@ fn fire_weapon(
     transform: Single<&Transform, With<PlayerCamera>>,
 ) {
     fire_weapon.write(FireWeapon(**transform));
+}
+
+fn fire_weapon_held(
+    mut fire_weapon: MessageWriter<FireWeaponHeld>,
+    time: Res<Time<Virtual>>,
+    transform: Single<&Transform, With<PlayerCamera>>,
+) {
+    fire_weapon.write(FireWeaponHeld {
+        transform: **transform,
+        delta: time.delta(),
+    });
 }
 
 fn toggle_fullscreen(

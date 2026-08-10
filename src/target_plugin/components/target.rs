@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{
+    color::palettes::{css::BLUE_VIOLET, tailwind::RED_800},
+    prelude::*,
+};
 
 use crate::target_plugin::{TargetMaterial, TargetResource};
 
@@ -23,20 +26,29 @@ impl Default for Target {
 #[derive(Message)]
 pub struct TargetHit(pub Entity);
 
+#[derive(Message)]
+pub struct TargetHitDelta(pub (Entity, Duration));
+
 #[derive(Event)]
 pub struct TargetDestroyed;
 
 #[derive(Message)]
 pub struct FireWeapon(pub Transform);
 
+#[derive(Message)]
+pub struct FireWeaponHeld {
+    pub transform: Transform,
+    pub delta: Duration,
+}
+
 pub fn tick(
     mut mats: ResMut<Assets<TargetMaterial>>,
-    mut q_target: Query<(&mut FadeIn, &MeshMaterial3d<TargetMaterial>)>,
+    mut q_target: Query<(Entity, &mut FadeIn, &MeshMaterial3d<TargetMaterial>)>,
     target_resource: Res<TargetResource>,
     time: Res<Time<Virtual>>,
 ) {
     let dt = time.delta();
-    for (mut fade_in, mat) in q_target.iter_mut() {
+    for (_entity, mut fade_in, mat) in q_target.iter_mut() {
         fade_in.0.tick(dt);
         if let Some(mut m) = mats.get_mut(mat) {
             m.ring = target_resource
@@ -45,10 +57,14 @@ pub fn tick(
         }
     }
 }
+
 pub fn handle_fire_weapon(
     mut ray_cast: MeshRayCast,
     mut target_hit: MessageWriter<TargetHit>,
+    mut target_hit_delta: MessageWriter<TargetHitDelta>,
     mut fire_weapon: PopulatedMessageReader<FireWeapon>,
+    mut fire_weapon_held: PopulatedMessageReader<FireWeaponHeld>,
+    mut prev_target_hit: Local<Option<Vec<Entity>>>,
     targets: Query<Entity, With<Target>>,
 ) {
     for FireWeapon(transform) in fire_weapon.read() {
@@ -58,15 +74,34 @@ pub fn handle_fire_weapon(
         let hits = ray_cast.cast_ray(ray, &settings);
 
         for (entity, _ray_mesh_hit) in hits.iter().take(1) {
+            prev_target_hit.replace(vec![*entity]);
             target_hit.write(TargetHit(*entity));
+        }
+    }
+
+    for FireWeaponHeld { transform, delta } in fire_weapon_held.read() {
+        let ray = Ray3d::new(transform.translation, transform.forward());
+        let filter = |entity| targets.contains(entity);
+        let settings = MeshRayCastSettings::default().with_filter(&filter);
+        let hits = ray_cast.cast_ray(ray, &settings);
+
+        for (entity, _ray_mesh_hit) in hits.iter().take(1) {
+            if let Some(ref prev_target_hit) = *prev_target_hit
+                && prev_target_hit.contains(entity)
+            {
+                target_hit_delta.write(TargetHitDelta((*entity, *delta)));
+            }
         }
     }
 }
 
 pub fn destroy_hit_targets(
     mut target_hit: PopulatedMessageReader<TargetHit>,
+    mut target_hit_delta: MessageReader<TargetHitDelta>,
     mut q_target: Query<&mut Target>,
     mut commands: Commands,
+    mut target_material: ResMut<Assets<TargetMaterial>>,
+    q_target_material: Query<&MeshMaterial3d<TargetMaterial>>,
     asset_server: ResMut<AssetServer>,
     time: Res<Time<Real>>,
 ) {
@@ -111,5 +146,36 @@ pub fn destroy_hit_targets(
                 e.despawn();
             });
         commands.trigger(TargetDestroyed);
+    }
+
+    for TargetHitDelta((entity, delta)) in target_hit_delta.read() {
+        let ent = commands.entity(*entity);
+        let Ok(mut target) = q_target.get_mut(ent.id()) else {
+            // skip case where target is despawned before commands queue
+            continue;
+        };
+        match target.as_mut() {
+            Target::Counter(count) => {
+                // *count -= 1;
+                if *count != 0 {
+                    continue;
+                }
+            }
+            Target::Duration(duration) => {
+                let time_on_target = *delta;
+
+                *duration = duration.saturating_sub(time_on_target);
+
+                if let Ok(h_mat) = q_target_material.get(*entity)
+                    && let Some(mut mat) = target_material.get_mut(h_mat.id())
+                {
+                    mat.color = BLUE_VIOLET.into();
+                }
+
+                if !duration.is_zero() {
+                    continue;
+                }
+            }
+        }
     }
 }

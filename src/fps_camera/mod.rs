@@ -9,7 +9,6 @@ use bevy::{
     prelude::*,
     window::{CursorOptions, PrimaryWindow},
 };
-pub struct FPSCameraPlugin;
 
 #[derive(Resource, Reflect)]
 pub struct FPSCameraConfig {
@@ -44,12 +43,18 @@ pub struct FPSCamera {
     pub pitch: f32,
     pub yaw: f32,
 }
+
+pub struct FPSCameraPlugin;
 impl Plugin for FPSCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(FPSCameraConfig::default()).add_systems(
-            RunFixedMainLoop,
-            update.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
-        );
+        app.insert_resource(FPSCameraConfig::default())
+            .add_systems(
+                RunFixedMainLoop,
+                (update, update_raycast)
+                    .chain()
+                    .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
+            )
+            .add_systems(PostUpdate, remove_hovered);
     }
 }
 fn setup(mut q_player_transform: Query<(&Transform, &mut FPSCamera)>) {
@@ -71,17 +76,6 @@ fn update(
     config: Res<FPSCameraConfig>,
     time: Res<Time<Real>>,
 ) {
-    // let (mut primary_window, mut cursor_options) = q_primary_window.single_mut().unwrap();
-    // if key_input.just_pressed(KeyCode::Escape) && primary_window.focused {
-    //     **grab_mouse = !**grab_mouse;
-    //     if **grab_mouse {
-    //         cursor_options.grab_mode = bevy::window::CursorGrabMode::Locked;
-    //         cursor_options.visible = false;
-    //     } else {
-    //         cursor_options.grab_mode = bevy::window::CursorGrabMode::None;
-    //         cursor_options.visible = true;
-    //     }
-    // }
     if !**grab_mouse {
         return;
     }
@@ -94,5 +88,29 @@ fn update(
             .clamp(-PI / 2., PI / 2.);
         state.yaw -= (mouse_motion.delta.x * config.sensitivity * RADIANS_PER_DOT);
         transform.rotation = Quat::from_euler(EulerRot::ZYX, 0.0, state.yaw, state.pitch);
+    }
+}
+
+#[derive(Component, Deref)]
+pub struct Hovered(pub usize);
+fn update_raycast(
+    mut ray_cast: MeshRayCast,
+    q_cam: Query<&Transform, With<FPSCamera>>,
+    mut commands: Commands,
+) {
+    for cam in q_cam.iter() {
+        let ray = Ray3d::new(cam.translation, cam.forward());
+        let settings = MeshRayCastSettings::default();
+        let results = ray_cast.cast_ray(ray, &settings);
+
+        for (idx, (entity, _hit)) in results.iter().enumerate() {
+            commands.entity(*entity).insert(Hovered(idx));
+        }
+    }
+}
+
+fn remove_hovered(mut commands: Commands, mut q_hovered: Query<Entity, With<Hovered>>) {
+    for hovered in q_hovered.iter_mut() {
+        commands.entity(hovered).remove::<Hovered>();
     }
 }

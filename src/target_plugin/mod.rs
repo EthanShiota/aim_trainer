@@ -20,7 +20,13 @@ pub struct TargetResource {
     pub easing: EasingCurve<f32>,
 }
 
-use crate::{AppState, GameState, target_plugin};
+use crate::{
+    AppState, GameState,
+    target_plugin::{
+        self,
+        target::{FireWeaponHeld, TargetHitDelta},
+    },
+};
 
 pub struct TargetPlugin;
 
@@ -65,7 +71,9 @@ impl Plugin for TargetPlugin {
             )
             // INFO: Messages
             .add_message::<TargetHit>()
+            .add_message::<TargetHitDelta>()
             .add_message::<FireWeapon>()
+            .add_message::<FireWeaponHeld>()
             // INFO: Handle target hit
             .add_systems(
                 Update,
@@ -73,6 +81,7 @@ impl Plugin for TargetPlugin {
                     handle_fire_weapon,
                     destroy_hit_targets,
                     components::target::tick,
+                    target_material::tick,
                 )
                     .run_if(in_state(AppState::InGame)),
             )
@@ -107,11 +116,7 @@ impl Plugin for TargetPlugin {
     }
 }
 
-fn setup_plugin(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<TargetMaterial>>,
-) {
+fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     commands.insert_resource(TargetResource {
         mesh: meshes.add(Sphere::new(2.)),
         ring_start: 0.,
