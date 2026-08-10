@@ -8,9 +8,7 @@ use nom::{
     },
     character::{
         char,
-        complete::{
-            alphanumeric1, digit1, line_ending, multispace0, multispace1, not_line_ending, one_of,
-        },
+        complete::{alphanumeric1, line_ending, multispace0, multispace1, not_line_ending, one_of},
     },
     combinator::{map, opt, recognize},
     error::context,
@@ -71,7 +69,7 @@ fn parse_slider_params(s: &[&str]) -> Result<SliderParams, Box<dyn Error>> {
     let slides = rest[0].parse().unwrap();
     let length = rest[1].parse().unwrap();
 
-    return Ok(SliderParams {
+    Ok(SliderParams {
         curve_type: slider_type.try_into().unwrap(),
         curve_points: points
             .iter()
@@ -82,7 +80,7 @@ fn parse_slider_params(s: &[&str]) -> Result<SliderParams, Box<dyn Error>> {
             .collect(),
         slides,
         length,
-    });
+    })
 }
 
 impl TryFrom<char> for CurveType {

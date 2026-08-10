@@ -30,11 +30,11 @@ use bevy::prelude::*;
 use bevy::text::TextSection;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
-use target_plugin::FireWeapon;
+use target_plugin::messages::{FireWeapon, FireWeaponHeld};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
-use crate::target_plugin::target::FireWeaponHeld;
-use crate::target_plugin::{BeatMap, Target, TargetDestroyed, TargetMaterial, TargetResource};
+use crate::target_plugin::events::TargetDestroyed;
+use crate::target_plugin::{BeatMap, Target, TargetMaterial, TargetResource};
 
 #[derive(Resource, Default, Clone, Copy)]
 struct GameStats {
@@ -173,7 +173,6 @@ enum GameState {
 
 #[derive(SubStates, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
 #[source(AppState = AppState::InGame)]
-
 enum EditMode {
     Editing,
     #[default]
@@ -298,18 +297,7 @@ fn playing(
     time: Res<Time<Real>>,
     _q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     _stopwatch: ResMut<SceneTimer>,
-    mut targets: Query<(Entity, &Target, &mut Transform)>,
 ) {
-    // Scale down targets overtime
-    // for (ent, _target, mut transform) in targets.iter_mut() {
-    //     transform.scale += -0.2 * time.delta_secs();
-    //     if transform.scale.x <= 0.0 {
-    //         commands.entity(ent).despawn();
-    //     }
-    // }
-    // if let Ok(sink) = q_audio.single() {
-    //     stopwatch.set_elapsed(sink.position());
-    // }
     if let Some(mut game_stats) = game_stats {
         if game_stats.time_left.is_some_and(|t| t.is_zero()) {
             // destroy world
@@ -377,12 +365,7 @@ fn update_ui(stats: Option<Res<GameStats>>, text: Populated<&mut Text, With<Scor
     }
 }
 
-fn debug_window(
-    mut contexts: EguiContexts,
-    beat_map: Option<Res<BeatMap>>,
-    target_res: Option<ResMut<TargetResource>>,
-    mut target_mat: ResMut<Assets<TargetMaterial>>,
-) -> Result {
+fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> Result {
     egui::Window::new("Beatmap Debug Inspector").show(contexts.ctx_mut()?, |ui| {
         if let Some(beat_map) = beat_map {
             let mut songs = beat_map.target_markers.clone();
@@ -560,20 +543,12 @@ fn light_and_cameras(
     ));
 }
 
-fn fire_weapon(
-    mut fire_weapon: MessageWriter<FireWeapon>,
-    transform: Single<&Transform, With<PlayerCamera>>,
-) {
-    fire_weapon.write(FireWeapon(**transform));
+fn fire_weapon(mut fire_weapon: MessageWriter<FireWeapon>) {
+    fire_weapon.write(FireWeapon);
 }
 
-fn fire_weapon_held(
-    mut fire_weapon: MessageWriter<FireWeaponHeld>,
-    time: Res<Time<Virtual>>,
-    transform: Single<&Transform, With<PlayerCamera>>,
-) {
+fn fire_weapon_held(mut fire_weapon: MessageWriter<FireWeaponHeld>, time: Res<Time<Virtual>>) {
     fire_weapon.write(FireWeaponHeld {
-        transform: **transform,
         delta: time.delta(),
     });
 }

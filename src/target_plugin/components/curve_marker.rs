@@ -91,7 +91,7 @@ fn tick_curve_marker(
                 }
             ).id();
             commands.delayed().duration(curve_marker.preempt).entity(hint).despawn();
-            info!("Curve Visual Spawned!");
+            trace!("Curve Marker Spawned!");
         }
 
         // INFO: Spawns curve
@@ -132,9 +132,9 @@ fn tick_curve_marker(
                 .insert((anim_id, AnimatedBy(slider)));
             let mut delay = commands.delayed();
             delay.secs(curve_marker.duration).entity(slider).despawn();
-            delay.secs(curve_marker.duration).entity(ent).despawn();
+            delay.secs(curve_marker.duration).entity(ent).try_despawn();
 
-            info!("Spawned Curve");
+            trace!("Spawned Curve");
         }
     }
 }

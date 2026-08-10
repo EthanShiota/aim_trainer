@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use crate::target_plugin::messages::*;
+use crate::{fps_camera::Hovered, target_plugin::events::TargetDestroyed};
 use bevy::{
     color::palettes::{css::BLUE_VIOLET, tailwind::RED_800},
     prelude::*,
@@ -23,24 +25,6 @@ impl Default for Target {
     }
 }
 
-#[derive(Message)]
-pub struct TargetHit(pub Entity);
-
-#[derive(Message)]
-pub struct TargetHitDelta(pub (Entity, Duration));
-
-#[derive(Event)]
-pub struct TargetDestroyed;
-
-#[derive(Message)]
-pub struct FireWeapon(pub Transform);
-
-#[derive(Message)]
-pub struct FireWeaponHeld {
-    pub transform: Transform,
-    pub delta: Duration,
-}
-
 pub fn tick(
     mut mats: ResMut<Assets<TargetMaterial>>,
     mut q_target: Query<(Entity, &mut FadeIn, &MeshMaterial3d<TargetMaterial>)>,
@@ -59,38 +43,25 @@ pub fn tick(
 }
 
 pub fn handle_fire_weapon(
-    mut ray_cast: MeshRayCast,
     mut target_hit: MessageWriter<TargetHit>,
     mut target_hit_delta: MessageWriter<TargetHitDelta>,
-    mut fire_weapon: PopulatedMessageReader<FireWeapon>,
-    mut fire_weapon_held: PopulatedMessageReader<FireWeaponHeld>,
-    mut prev_target_hit: Local<Option<Vec<Entity>>>,
-    targets: Query<Entity, With<Target>>,
+    mut fire_weapon: MessageReader<FireWeapon>,
+    mut fire_weapon_held: MessageReader<FireWeaponHeld>,
+    q_hits: Query<(Entity, &Hovered), With<Target>>,
 ) {
-    for FireWeapon(transform) in fire_weapon.read() {
-        let ray = Ray3d::new(transform.translation, transform.forward());
-        let filter = |entity| targets.contains(entity);
-        let settings = MeshRayCastSettings::default().with_filter(&filter);
-        let hits = ray_cast.cast_ray(ray, &settings);
-
-        for (entity, _ray_mesh_hit) in hits.iter().take(1) {
-            prev_target_hit.replace(vec![*entity]);
+    let hits = q_hits
+        .into_iter()
+        .sort_by_key::<&Hovered, _>(|hover| hover.0)
+        .collect::<Vec<_>>();
+    for _ in fire_weapon.read() {
+        for (entity, Hovered(_)) in hits.iter().take(1) {
             target_hit.write(TargetHit(*entity));
         }
     }
 
-    for FireWeaponHeld { transform, delta } in fire_weapon_held.read() {
-        let ray = Ray3d::new(transform.translation, transform.forward());
-        let filter = |entity| targets.contains(entity);
-        let settings = MeshRayCastSettings::default().with_filter(&filter);
-        let hits = ray_cast.cast_ray(ray, &settings);
-
-        for (entity, _ray_mesh_hit) in hits.iter().take(1) {
-            if let Some(ref prev_target_hit) = *prev_target_hit
-                && prev_target_hit.contains(entity)
-            {
-                target_hit_delta.write(TargetHitDelta((*entity, *delta)));
-            }
+    for FireWeaponHeld { delta } in fire_weapon_held.read() {
+        for (entity, Hovered(_)) in hits.iter().take(1) {
+            target_hit_delta.write(TargetHitDelta((*entity, *delta)));
         }
     }
 }
@@ -143,7 +114,7 @@ pub fn destroy_hit_targets(
             .secs(2.)
             .get_entity(*entity)
             .map(|mut e| {
-                e.despawn();
+                e.try_despawn();
             });
         commands.trigger(TargetDestroyed);
     }

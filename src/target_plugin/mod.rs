@@ -4,6 +4,8 @@ use bevy::{
     camera::visibility::RenderLayers, input::common_conditions::input_just_pressed, prelude::*,
 };
 mod components;
+pub mod events;
+pub mod messages;
 mod target_material;
 pub use components::*;
 pub use target_material::TargetMaterial;
@@ -20,13 +22,7 @@ pub struct TargetResource {
     pub easing: EasingCurve<f32>,
 }
 
-use crate::{
-    AppState, GameState,
-    target_plugin::{
-        self,
-        target::{FireWeaponHeld, TargetHitDelta},
-    },
-};
+use crate::{AppState, GameState};
 
 pub struct TargetPlugin;
 
@@ -70,10 +66,10 @@ impl Plugin for TargetPlugin {
                 ),
             )
             // INFO: Messages
-            .add_message::<TargetHit>()
-            .add_message::<TargetHitDelta>()
-            .add_message::<FireWeapon>()
-            .add_message::<FireWeaponHeld>()
+            .add_message::<messages::TargetHit>()
+            .add_message::<messages::TargetHitDelta>()
+            .add_message::<messages::FireWeapon>()
+            .add_message::<messages::FireWeaponHeld>()
             // INFO: Handle target hit
             .add_systems(
                 Update,
