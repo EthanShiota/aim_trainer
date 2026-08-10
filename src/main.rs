@@ -4,6 +4,7 @@ mod fps_camera;
 mod materials;
 mod menus;
 mod scenarios;
+mod scoreing;
 mod target_plugin;
 
 use bevy::audio::AddAudioSource;
@@ -35,12 +36,6 @@ use target_plugin::messages::{FireWeapon, FireWeaponHeld};
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 use crate::target_plugin::events::TargetDestroyed;
 use crate::target_plugin::{BeatMap, Target, TargetMaterial, TargetResource};
-
-#[derive(Resource, Default, Clone, Copy)]
-struct GameStats {
-    score: usize,
-    time_left: Option<Duration>,
-}
 
 #[derive(Resource, Clone, Copy)]
 pub struct GameSettings {
@@ -104,7 +99,7 @@ fn main() {
             EguiPlugin::default(),
             edit_mode::EditPlugin,
             menus::MenuPlugin,
-            WorldInspectorPlugin::new(),
+            scoreing::ScoringPlugin,
         ))
         .add_plugins(MaterialPlugin::<SkyMaterial>::default())
         // INFO: State
@@ -128,11 +123,7 @@ fn main() {
         .add_systems(OnEnter(GameState::Playing), transition::play)
         .add_systems(
             Update,
-            (
-                // TODO: Make better score ui
-                update_ui,
-                bevy::ui::widget::update_viewport_render_target_size,
-            ),
+            (bevy::ui::widget::update_viewport_render_target_size,),
         )
         // INFO: Game Logic loops
         .add_systems(
@@ -151,8 +142,6 @@ fn main() {
         )
         // INFO: Sync settings to game systems
         .add_systems(OnExit(AppState::Menu), sync_game_settings)
-        // INFO: Update score when target is destroyed
-        .add_observer(update_score)
         .run();
 }
 
@@ -246,16 +235,6 @@ fn menu_button(text: &'static str) -> impl Scene {
     }
 }
 
-fn score_menu(stats: GameStats) -> impl Scene {
-    let score = format!("{}", stats.score);
-    bsn! {
-        Node {display: Display::Flex, width: percent(100.), height: percent(100.), justify_content: JustifyContent::Center, align_items: AlignItems::Center}
-        TextFont {font_size: px(200.)}
-        BackgroundColor(VIOLET_100)
-        Text(score)
-    }
-}
-
 fn music_controls(
     mut contexts: EguiContexts,
     mut q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
@@ -292,22 +271,11 @@ fn music_controls(
 
 fn playing(
     mut commands: Commands,
-    game_stats: Option<ResMut<GameStats>>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     time: Res<Time<Real>>,
     _q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     _stopwatch: ResMut<SceneTimer>,
 ) {
-    if let Some(mut game_stats) = game_stats {
-        if game_stats.time_left.is_some_and(|t| t.is_zero()) {
-            // destroy world
-            // TODO: More robust scenario handling and exit conditions
-            commands.set_state(AppState::Menu);
-            commands.spawn_scene(score_menu(*game_stats));
-        }
-        game_stats.time_left = game_stats.time_left.map(|t| t.saturating_sub(time.delta()));
-    }
-
     if mouse_input.just_pressed(MouseButton::Left) {
         commands.run_system_cached(fire_weapon);
     } else if mouse_input.pressed(MouseButton::Left) {
@@ -347,20 +315,6 @@ fn game_loop(
                 commands.set_state(GameState::Paused);
             }
             GameState::Paused => commands.set_state(GameState::Playing),
-        }
-    }
-}
-
-fn update_ui(stats: Option<Res<GameStats>>, text: Populated<&mut Text, With<ScoreUI>>) {
-    if let Some(stats) = stats
-        && stats.is_changed()
-    {
-        for mut text in text {
-            *text.get_text_mut() = format!(
-                "score: {}\ntime left: {:?}",
-                stats.score,
-                stats.time_left.unwrap_or(Duration::ZERO)
-            );
         }
     }
 }
@@ -563,10 +517,6 @@ fn toggle_fullscreen(
     } else {
         window.mode = WindowMode::Windowed;
     }
-}
-
-fn update_score(_: On<TargetDestroyed>, mut stats: If<ResMut<GameStats>>) {
-    stats.score += 1;
 }
 
 fn sync_game_settings(

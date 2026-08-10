@@ -19,8 +19,8 @@ use std::{
 };
 
 use crate::{
-    AudioBuffer, EditMode, GameStats, SceneTimer,
-    target_plugin::{BeatMap, CurveMarker, TargetMarker},
+    AudioBuffer, EditMode, SceneTimer,
+    target_plugin::{BeatMap, CurveMarker, TargetMarker, TargetResource},
 };
 use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
 
@@ -110,10 +110,10 @@ fn circle_from_3_points(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
 }
 pub fn osu(
     In(osu_beat_map): In<BeatMapOsu>,
+    mut target_resource: ResMut<TargetResource>,
     mut commands: Commands,
     mut audio: ResMut<Assets<AudioBuffer>>,
-    // beat_map_path: Res<BeatMapPath>,
-    meshes: ResMut<Assets<Mesh>>,
+    mut meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
     mut stopwatch: ResMut<SceneTimer>,
 ) {
@@ -134,16 +134,6 @@ pub fn osu(
         decoder.collect::<Vec<_>>(),
     );
 
-    commands.set_state(EditMode::Normal);
-    commands.insert_resource(GameStats::default());
-    // let leadin = Duration::from_millis(osu_beat_map.general.audio_lead_in as u64);
-    // stopwatch.pause();
-    // commands
-    //     .delayed()
-    //     .duration(leadin)
-    //     .insert_resource(SceneTimer::default());
-
-    // TODO: Fix length, add cycles (slides)
     let BeatMapDecoderState {
         target_points: target_markers,
         target_curves,
@@ -300,13 +290,19 @@ pub fn osu(
             state
         },
     );
+
+    commands.set_state(EditMode::Normal);
+    // TODO: Leadin
+    let leadin = Duration::from_millis(osu_beat_map.general.audio_lead_in as u64);
+
+    target_resource.mesh = meshes.add(Sphere::new(osu_beat_map.difficulty.circle_size));
     let beat_map = BeatMap {
         song: audio.add(AudioBuffer(audio_buffer)),
         target_curves,
         target_markers,
     };
     stopwatch.reset();
-    beat_map.spawn(commands.reborrow(), meshes, materials);
+    beat_map.spawn(commands.reborrow());
     commands.insert_resource(beat_map);
 }
 
