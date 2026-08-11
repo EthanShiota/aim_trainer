@@ -365,7 +365,7 @@ impl BeatMapOsu {
             },
             timing_points,
             hit_objects: hitobj
-                .into_iter()
+                .iter()
                 .map(|s| s.as_slice().try_into().unwrap())
                 .collect(),
         })

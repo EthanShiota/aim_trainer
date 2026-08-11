@@ -41,18 +41,11 @@ impl Plugin for TargetPlugin {
             .init_state::<SpawnerState>()
             // INFO: Target Material
             .add_plugins(MaterialPlugin::<TargetMaterial>::default())
-            .add_plugins(CurvePlugin)
+            .add_plugins(MarkerPlugin)
             .add_plugins(TimingRingPlugin)
             // INFO: Gizmo
             .insert_gizmo_config(
                 SpawnerGizmo,
-                GizmoConfig {
-                    render_layers: RenderLayers::layer(1),
-                    ..default()
-                },
-            )
-            .insert_gizmo_config(
-                CurveGizmo,
                 GizmoConfig {
                     render_layers: RenderLayers::layer(1),
                     ..default()
@@ -80,7 +73,6 @@ impl Plugin for TargetPlugin {
                 Update,
                 (draw_spawners).run_if(resource_equals(DebugMode(true))),
             )
-            .add_systems(Update, tick.run_if(in_state(GameState::Playing)))
             .add_systems(Update, spawner_loop.run_if(in_state(SpawnerState::Active)))
             // INFO: Target Events
             .add_observer(on_target_destroyed)
@@ -114,6 +106,6 @@ fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
         mesh: meshes.add(Sphere::new(2.)),
         ring_start: 0.,
         ring_end: PI / 2.,
-        easing: EasingCurve::new(0., 1., EaseFunction::CubicIn),
+        easing: EasingCurve::new(0., 1., EaseFunction::Linear),
     });
 }

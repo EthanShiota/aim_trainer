@@ -20,7 +20,7 @@ use std::{
 
 use crate::{
     AudioBuffer, EditMode, SceneTimer,
-    target_plugin::{BeatMap, CurveMarker, TargetMarker, TargetResource},
+    target_plugin::{BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
 };
 use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
 
@@ -54,8 +54,8 @@ fn linear_curve(points: Vec<Vec2>, curve_duration: f32, slides: usize) -> Sample
         .unwrap()
 }
 struct BeatMapDecoderState {
-    target_points: Vec<(TargetMarker, Transform)>,
-    target_curves: Vec<CurveMarker>,
+    target_points: Vec<(TargetMarker, Marker, Transform)>,
+    target_curves: Vec<(CurveMarker, Marker)>,
     beat_length: f32,
     slider_velocity: f32,
     previous_timing_point: f32,
@@ -211,24 +211,31 @@ pub fn osu(
                             .resample_auto(100 * slides)
                             .unwrap();
 
-                        state.target_curves.push(CurveMarker {
-                            curve,
-                            // truncated to nearest millisecond
-                            duration: curve_duration,
-                            lifetime: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
-                            preempt: Duration::from_millis(preempt_ms as u64),
-                        });
+                        state.target_curves.push((
+                            CurveMarker {
+                                curve,
+                                duration: curve_duration,
+                            },
+                            Marker::new(
+                                Duration::from_millis(t as u64),
+                                Duration::from_millis(preempt_ms as u64),
+                            ),
+                        ));
                     }
                     parser::CurveType::CentripetalCatmullRom => todo!(),
                     parser::CurveType::Linear => {
                         let curve = linear_curve(points, curve_duration, slides);
-                        state.target_curves.push(CurveMarker {
-                            curve,
-                            duration: curve_duration,
-                            lifetime: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
 
-                            preempt: Duration::from_millis(preempt_ms as u64),
-                        });
+                        state.target_curves.push((
+                            CurveMarker {
+                                curve,
+                                duration: curve_duration,
+                            },
+                            Marker::new(
+                                Duration::from_millis(t as u64),
+                                Duration::from_millis(preempt_ms as u64),
+                            ),
+                        ));
                     }
                     parser::CurveType::PerfectCircle => {
                         if points.len() != 3 {
@@ -264,25 +271,27 @@ pub fn osu(
                         .unwrap()
                         .resample_auto(100 * slides)
                         .unwrap();
-                        state.target_curves.push(CurveMarker {
-                            curve,
-                            duration: curve_duration,
-                            lifetime: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
-                            preempt: Duration::from_millis(preempt_ms as u64),
-                        });
+
+                        state.target_curves.push((
+                            CurveMarker {
+                                curve,
+                                duration: curve_duration,
+                            },
+                            Marker::new(
+                                Duration::from_millis(t as u64),
+                                Duration::from_millis(preempt_ms as u64),
+                            ),
+                        ));
                     }
                 }
             } else {
                 // Push target into beat_map
                 state.target_points.push((
-                    TargetMarker {
-                        time: Timer::new(Duration::from_millis(t as u64), TimerMode::Once),
-                        // TODO: Calculate preempt
-                        preempt: Timer::new(
-                            Duration::from_millis(preempt_ms as u64),
-                            TimerMode::Once,
-                        ),
-                    },
+                    TargetMarker,
+                    Marker::new(
+                        Duration::from_millis(t as u64),
+                        Duration::from_millis(preempt_ms as u64),
+                    ),
                     Transform::from_translation(convert_osu_to_world(to_vec2(hit_obj.position))),
                 ));
             }

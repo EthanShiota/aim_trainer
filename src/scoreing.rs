@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection};
 
 use crate::AppState;
@@ -15,7 +17,32 @@ struct ScoreDisplay;
 impl Plugin for ScoringPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(AppState::InGame), setup)
-            .add_systems(Update, update_score.run_if(in_state(AppState::InGame)));
+            .add_systems(
+                Update,
+                (tick, update_score).run_if(in_state(AppState::InGame)),
+            );
+    }
+}
+
+#[derive(Component, Clone, Default)]
+pub struct Lifetime(Timer);
+
+impl Lifetime {
+    pub fn duration(duration: Duration) -> Self {
+        Self(Timer::new(duration, TimerMode::Once))
+    }
+}
+
+fn tick(
+    mut q_lifetime: Query<(Entity, &mut Lifetime)>,
+    time: Res<Time<Virtual>>,
+    mut commands: Commands,
+) {
+    for (ent, mut lifetime) in q_lifetime.iter_mut() {
+        lifetime.0.tick(time.delta());
+        if lifetime.0.is_finished() {
+            commands.entity(ent).despawn();
+        }
     }
 }
 

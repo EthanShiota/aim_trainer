@@ -1,8 +1,15 @@
 use bevy::{
-    color::palettes::{css::BLUE_VIOLET, tailwind::GREEN_300},
+    color::{
+        ColorCurve,
+        palettes::{
+            css::BLUE_VIOLET,
+            tailwind::{GREEN_300, RED_800},
+        },
+    },
     prelude::*,
     render::render_resource::AsBindGroup,
 };
+use dasp::sample::ToSample;
 
 use crate::{fps_camera::Hovered, target_plugin::Target};
 
@@ -32,9 +39,13 @@ pub fn tick(
 ) {
     for (ent, mat) in q_mat.into_iter() {
         if let Some(mut mat) = target_mats.get_mut(mat.id()) {
-            match q_hovered.contains(ent) {
-                true => mat.color = BLUE_VIOLET.into(),
-                false => mat.color = GREEN_300.into(),
+            match q_hovered.get(ent) {
+                Ok(Hovered(order)) => {
+                    mat.color = Oklaba::from(BLUE_VIOLET)
+                        .mix(&Oklaba::from(RED_800), 1. - f32::exp(-(*order as f32)))
+                        .into();
+                }
+                Err(_) => mat.color = GREEN_300.into(),
             }
         }
     }

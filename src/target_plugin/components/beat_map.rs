@@ -1,14 +1,17 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 use crate::{
     AppState, AudioBuffer,
-    target_plugin::{CurveMarker, TargetMarker},
+    scoreing::Lifetime,
+    target_plugin::{CurveMarker, Marker, TargetMarker},
 };
 #[derive(Resource)]
 pub struct BeatMap {
     pub song: Handle<AudioBuffer>,
-    pub target_markers: Vec<(TargetMarker, Transform)>,
-    pub target_curves: Vec<CurveMarker>,
+    pub target_markers: Vec<(TargetMarker, Marker, Transform)>,
+    pub target_curves: Vec<(CurveMarker, Marker)>,
 }
 
 impl BeatMap {
@@ -17,12 +20,17 @@ impl BeatMap {
             AudioPlayer(self.song.clone()),
             DespawnOnExit(AppState::InGame),
         ));
-        for (target_marker, transform) in self.target_markers.iter().cloned() {
-            commands.spawn((target_marker, transform, DespawnOnExit(AppState::InGame)));
+        for (target_marker, marker, transform) in self.target_markers.iter().cloned() {
+            commands.spawn((
+                target_marker,
+                marker,
+                transform,
+                DespawnOnExit(AppState::InGame),
+            ));
         }
 
-        for curve_marker in self.target_curves.iter().cloned() {
-            commands.spawn((curve_marker, DespawnOnExit(AppState::InGame)));
+        for (curve_marker, marker) in self.target_curves.iter().cloned() {
+            commands.spawn((curve_marker, marker, DespawnOnExit(AppState::InGame)));
         }
     }
 }

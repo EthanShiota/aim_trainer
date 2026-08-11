@@ -10,6 +10,8 @@ use bevy::{
     window::{CursorOptions, PrimaryWindow},
 };
 
+use crate::target_plugin::Target;
+
 #[derive(Resource, Reflect)]
 pub struct FPSCameraConfig {
     pub sensitivity: f32,
@@ -96,11 +98,14 @@ pub struct Hovered(pub usize);
 fn update_raycast(
     mut ray_cast: MeshRayCast,
     q_cam: Query<&Transform, With<FPSCamera>>,
+    q_target: Query<(), With<Target>>,
     mut commands: Commands,
 ) {
     for cam in q_cam.iter() {
         let ray = Ray3d::new(cam.translation, cam.forward());
-        let settings = MeshRayCastSettings::default();
+        let filter = |entity| q_target.contains(entity);
+        let mut settings = MeshRayCastSettings::default().with_filter(&filter);
+
         let results = ray_cast.cast_ray(ray, &settings);
 
         for (idx, (entity, _hit)) in results.iter().enumerate() {

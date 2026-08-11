@@ -11,10 +11,12 @@ use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
+use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -279,7 +281,7 @@ fn playing(
     if mouse_input.just_pressed(MouseButton::Left) {
         commands.run_system_cached(fire_weapon);
     } else if mouse_input.pressed(MouseButton::Left) {
-        commands.run_system_cached(fire_weapon_held);
+        commands.run_system_cached_with(fire_weapon_held, time.delta());
     }
 }
 
@@ -319,23 +321,41 @@ fn game_loop(
     }
 }
 
-fn debug_window(mut contexts: EguiContexts, beat_map: Option<Res<BeatMap>>) -> Result {
+fn debug_window(
+    mut contexts: EguiContexts,
+    beat_map: Option<Res<BeatMap>>,
+    target_resource: Option<ResMut<TargetResource>>,
+) -> Result {
     egui::Window::new("Beatmap Debug Inspector").show(contexts.ctx_mut()?, |ui| {
         if let Some(beat_map) = beat_map {
-            let mut songs = beat_map.target_markers.clone();
-            songs.sort_by_key(|v| v.0.time.duration());
+            let hit_markers = beat_map.target_markers.clone();
             egui::ScrollArea::new([false, true])
                 .max_height(400.)
                 .show(ui, |ui| {
-                    for (duration, transform) in songs {
-                        ui.label(format!(
-                            "time: {:?} position: {:?}",
-                            duration.time, transform.translation
-                        ));
+                    for (_target_marker, marker, _transform) in hit_markers {
+                        ui.label(format!("{:?}", marker));
                     }
                 });
         }
     });
+
+    if let Some(mut target_resource) = target_resource {
+        egui::Window::new("Target Resource").show(contexts.ctx_mut()?, |ui| {
+            let TargetResource {
+                ring_start,
+                ring_end,
+                mesh: _,
+                easing: _,
+            } = target_resource.as_mut();
+
+            egui::Slider::new(ring_start, 0.0..=3.0)
+                .text("Ring Start")
+                .ui(ui);
+            egui::Slider::new(ring_end, 0.0..=3.0)
+                .text("Ring End")
+                .ui(ui);
+        });
+    }
     Ok(())
 }
 pub mod transition {
@@ -508,16 +528,23 @@ fn fire_weapon(q_hit: Query<(Entity, &Hovered), With<Target>>, mut commands: Com
     }
 }
 
-fn fire_weapon_held(q_hit: Query<(Entity, &Target, &Hovered)>, mut commands: Commands) {
+fn fire_weapon_held(
+    In(delta): In<Duration>,
+    q_hit: Query<(Entity, &mut Target, &Hovered)>,
+    mut commands: Commands,
+) {
     let mut hits: Vec<_> = q_hit.into_iter().collect();
     if hits.len() > 1 {
         info!("{:?}", hits.iter().map(|(_, _, h)| h.0).collect::<Vec<_>>());
     }
     hits.sort_by_key(|(_, _, h)| h.0);
-    if let Some((e, t, _)) = hits.first()
-        && let Target::Duration(_) = t
+    if let Some((e, t, _)) = hits.get_mut(0)
+        && let Target::Duration(dur) = t.as_mut()
     {
-        commands.entity(*e).trigger(TargetHit);
+        *dur = dur.saturating_sub(delta);
+        if dur.is_zero() {
+            commands.entity(*e).trigger(TargetDestroyed);
+        }
     }
 }
 

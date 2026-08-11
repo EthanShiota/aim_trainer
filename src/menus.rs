@@ -14,8 +14,6 @@ use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 use crate::{AppState, GameSettings, scenarios};
 use parser::BeatMapOsu;
-#[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct MenuSet;
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -30,7 +28,10 @@ impl Plugin for MenuPlugin {
 fn settings_window(mut contexts: EguiContexts, mut settings: ResMut<GameSettings>) -> Result {
     egui::Window::new("Settings").show(contexts.ctx_mut()?, |ui| {
         ui.add(egui::Slider::new(&mut settings.volume, 0.0..=1.0).text("Volume"));
-        ui.add(egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0).text("Mouse Sensitivity"));
+        ui.add(
+            egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0)
+                .text("Mouse Sensitivity"),
+        );
         ui.add(egui::Slider::new(&mut settings.dpi, 400..=3200).text("DPI"));
     });
     Ok(())
@@ -68,20 +69,20 @@ fn main_menu(
     mut beat_maps: Local<Vec<Vec<BeatMapOsu>>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
-    ctx.global_style_mut(|style| {
-        style.visuals.extreme_bg_color = color(RED_700);
-    });
+    // ctx.global_style_mut(|style| {
+    //     style.visuals.extreme_bg_color = color(RED_700);
+    // });
     let mut viewport_ui = Ui::new(
         ctx.clone(),
         "viewport".into(),
         UiBuilder::new().max_rect(ctx.viewport_rect()),
     );
 
-    let mut vis = viewport_ui.visuals().clone();
-    egui::Window::new("style").show(&mut viewport_ui, |ui| vis.ui(ui));
-    ctx.global_style_mut(|style| {
-        style.visuals = vis;
-    });
+    // let mut vis = viewport_ui.visuals().clone();
+    // egui::Window::new("style").show(&mut viewport_ui, |ui| vis.ui(ui));
+    // ctx.global_style_mut(|style| {
+    //     style.visuals = vis;
+    // });
     if beat_maps.is_empty() {
         let now = time::Instant::now();
         let mut count = 0;
@@ -105,13 +106,10 @@ fn main_menu(
 
     egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
         for versions in beat_maps.iter() {
-            if versions.len() > 0 {
+            if !versions.is_empty() {
                 egui::CollapsingHeader::new(&versions[0].metadata.title).show(ui, |ui| {
-                    for beat_map in versions.into_iter() {
-                        if ui
-                            .button(format!("{}", &beat_map.metadata.version))
-                            .clicked()
-                        {
+                    for beat_map in versions.iter() {
+                        if ui.button((beat_map.metadata.version).to_string()).clicked() {
                             commands.set_state(AppState::InGame);
                             commands.run_system_cached_with(scenarios::osu, beat_map.clone());
                         }

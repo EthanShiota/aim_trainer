@@ -33,14 +33,21 @@ pub fn tick(
     mut q_target: Query<(Entity, &mut FadeIn, &MeshMaterial3d<TargetMaterial>)>,
     target_resource: Res<TargetResource>,
     time: Res<Time<Virtual>>,
+    mut commands: Commands,
 ) {
     let dt = time.delta();
-    for (_entity, mut fade_in, mat) in q_target.iter_mut() {
+    for (entity, mut fade_in, mat) in q_target.iter_mut() {
         fade_in.0.tick(dt);
         if let Some(mut m) = mats.get_mut(mat) {
-            m.ring = target_resource
+            let ease = target_resource
                 .easing
                 .sample_unchecked(fade_in.0.fraction());
+            m.ring = (1. - ease) * target_resource.ring_start + ease * target_resource.ring_end;
+
+            if fade_in.0.is_finished() {
+                m.ring_width = 2.;
+                commands.entity(entity).remove::<FadeIn>();
+            }
         }
     }
 }
