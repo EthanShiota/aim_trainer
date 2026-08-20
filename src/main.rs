@@ -274,7 +274,7 @@ fn music_controls(
 fn playing(
     mut commands: Commands,
     mouse_input: Res<ButtonInput<MouseButton>>,
-    time: Res<Time<Real>>,
+    time: Res<Time<Virtual>>,
     _q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     _stopwatch: ResMut<SceneTimer>,
 ) {
@@ -332,8 +332,8 @@ fn debug_window(
             egui::ScrollArea::new([false, true])
                 .max_height(400.)
                 .show(ui, |ui| {
-                    for (_target_marker, marker, _transform) in hit_markers {
-                        ui.label(format!("{:?}", marker));
+                    for (_target_marker, marker, transform) in hit_markers {
+                        ui.label(format!("{:?} at {:?}", marker, transform.translation));
                     }
                 });
         }

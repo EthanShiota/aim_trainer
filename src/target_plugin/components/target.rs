@@ -68,8 +68,8 @@ pub fn on_target_hit(
                 *count == 0
             }
             Target::Duration(duration) => {
-                *duration = duration.saturating_sub(time.delta());
-                score.points += 1;
+                // *duration = duration.saturating_sub(time.delta());
+                // score.points += 1;
                 duration.is_zero()
             }
         };
