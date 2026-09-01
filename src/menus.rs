@@ -109,9 +109,15 @@ fn main_menu(
             if !versions.is_empty() {
                 egui::CollapsingHeader::new(&versions[0].metadata.title).show(ui, |ui| {
                     for beat_map in versions.iter() {
-                        if ui.button((beat_map.metadata.version).to_string()).clicked() {
+                        let button = ui.button((beat_map.metadata.version).to_string());
+                        if button.clicked() {
                             commands.set_state(AppState::InGame);
                             commands.run_system_cached_with(scenarios::osu, beat_map.clone());
+                        }
+                        if button.secondary_clicked() {
+                            commands.set_state(AppState::InGame);
+                            commands
+                                .run_system_cached_with(scenarios::debug_scene, beat_map.clone());
                         }
                     }
                 });

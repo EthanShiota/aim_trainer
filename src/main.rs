@@ -102,6 +102,7 @@ fn main() {
             edit_mode::EditPlugin,
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
+            WorldInspectorPlugin::default(),
         ))
         .add_plugins(MaterialPlugin::<SkyMaterial>::default())
         // INFO: State

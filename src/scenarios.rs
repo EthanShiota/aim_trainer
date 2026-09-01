@@ -1,5 +1,6 @@
 #![allow(unused)]
 use bevy::{
+    color::palettes::css::RED,
     math::{
         NormedVectorSpace, VectorSpace,
         bounding::Bounded2d,
@@ -20,9 +21,27 @@ use std::{
 
 use crate::{
     AudioBuffer, EditMode, SceneTimer,
-    target_plugin::{BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
+    target_plugin::{self, BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
 };
 use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
+
+pub fn debug_scene(In(osu): In<BeatMapOsu>, mut commands: Commands) {
+    let points = vec![
+        vec2(160., 192.),
+        vec2(160., 192.),
+        vec2(256., 336.),
+        vec2(256., 336.),
+        vec2(352., 192.),
+        vec2(352., 192.),
+        vec2(269., 67.),
+    ];
+    let curve = points_to_bezier(&points);
+    // commands.spawn_scene(bsn! {
+    //     MeshMaterial3d::<StandardMaterial>(asset_value(StandardMaterial::from_color(RED)))
+    //     Mesh3d(asset_value(Polyline3d::new(curve)))
+    //
+    // });
+}
 
 fn linear_curve(points: &[Vec2], curve_duration: f32, slides: usize) -> SampleAutoCurve<Vec3> {
     let curve = points
@@ -254,6 +273,7 @@ fn create_curve_marker(
                 CurveMarker {
                     curve,
                     duration: curve_duration,
+                    slides,
                 },
                 Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
             )
@@ -265,6 +285,7 @@ fn create_curve_marker(
             (
                 CurveMarker {
                     curve,
+                    slides,
                     duration: curve_duration,
                 },
                 Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
@@ -300,6 +321,7 @@ fn create_curve_marker(
 
             (
                 CurveMarker {
+                    slides,
                     curve,
                     duration: curve_duration,
                 },

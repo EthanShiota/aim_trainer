@@ -37,6 +37,7 @@ pub fn tick(
     q_mat: Query<(Entity, &MeshMaterial3d<TargetMaterial>), With<Target>>,
     mut target_mats: ResMut<Assets<TargetMaterial>>,
 ) {
+    return;
     for (ent, mat) in q_mat.into_iter() {
         if let Some(mut mat) = target_mats.get_mut(mat.id()) {
             match q_hovered.get(ent) {
