@@ -8,9 +8,10 @@ use bevy::{
     },
     prelude::*,
 };
+use bevy_egui::egui::os;
 use rodio::Source;
 use std::{
-    f32::consts::TAU,
+    f32::{self, consts::TAU},
     fmt::Debug,
     fs::File,
     iter::Peekable,
@@ -107,7 +108,7 @@ fn convert_osu_pixels_to_world(point: Vec2) -> Vec3 {
     vec3(x, y, -50.)
 }
 
-fn circle_from_3_points(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
+fn circle_center(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
     let m1 = (a + b) * 0.5;
     let m2 = (a + c) * 0.5;
     let ab = b - a;
@@ -213,6 +214,7 @@ pub fn osu(
                     preempt_ms as u64,
                     t as u64,
                     slides,
+                    length,
                 ));
             } else {
                 // Push target into beat_map
@@ -255,6 +257,8 @@ fn create_curve_marker(
     preempt_ms: u64,
     t: u64,
     slides: usize,
+    // Length in osu px
+    length: f32,
 ) -> (CurveMarker, Marker) {
     match curve_type {
         parser::CurveType::Bezier => {
@@ -297,17 +301,27 @@ fn create_curve_marker(
                 todo!()
             }
 
+            let osu_px_points: Vec<Vec2> = points.iter().copied().collect();
+            let center = circle_center(osu_px_points[0], osu_px_points[1], osu_px_points[2]);
+            let radius = center.distance(osu_px_points[0]);
+
+            let circumference = f32::consts::TAU * radius;
+
+            let percent_circle = length / circumference;
+
             let points: Vec<Vec2> = points
                 .iter()
                 .map(|&p| convert_osu_pixels_to_world(p).xy())
                 .collect();
 
+            // HACK: Get z from conversion function for later use
             let z = convert_osu_pixels_to_world(Vec2::ZERO).z;
-            let center = circle_from_3_points(points[0], points[1], points[2]);
+
+            let center = circle_center(points[0], points[1], points[2]);
             let radius = center.distance(points[0]);
 
             let unlooped_curve = bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
-                let angle = i * TAU;
+                let angle = i * TAU * percent_circle;
                 let xy = vec2(
                     center.x + radius * f32::cos(angle),
                     center.y + radius * f32::sin(angle),
@@ -469,19 +483,19 @@ fn test_circle_from_3_points() {
     let a = vec2(1., 0.);
     let b = vec2(0., 1.);
     let c = vec2(-1., 0.);
-    let center = circle_from_3_points(a, b, c);
+    let center = circle_center(a, b, c);
     assert!(center.norm() < 0.001);
 
     let a = vec2(2., 0.);
     let b = vec2(0., 2.);
     let c = vec2(-2., 0.);
-    let center = circle_from_3_points(a, b, c);
+    let center = circle_center(a, b, c);
     assert!(center.norm() < 0.001);
 
     let a = vec2(5., 0.);
     let b = vec2(5., 5.);
     let c = vec2(0., 5.);
-    let center = circle_from_3_points(a, b, c);
+    let center = circle_center(a, b, c);
     assert!((center.x - 2.5).abs() < 0.001);
     assert!((center.y - 2.5).abs() < 0.001);
 }

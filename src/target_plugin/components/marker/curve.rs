@@ -1,14 +1,25 @@
 #![allow(unused)]
-use std::{f32, ops::Range, time::Duration};
 use bevy_procedural_meshes::*;
+use std::{f32, ops::Range, time::Duration};
 
 use bevy::{
-    animation::{AnimatedBy, animate_targets, animated_field}, asset::{RenderAssetUsages, uuid::Uuid}, color::palettes::tailwind::{BLUE_300, GREEN_400, RED_100, RED_800}, math::curve, prelude::*,
+    animation::{AnimatedBy, animate_targets, animated_field},
+    asset::{RenderAssetUsages, uuid::Uuid},
+    color::palettes::tailwind::{BLUE_300, GREEN_400, RED_100, RED_800},
+    math::curve,
+    prelude::*,
 };
 use bevy_inspector_egui::egui::epaint::color;
 
 use crate::{
-    AppState, GameState, scoreing::Lifetime, target_plugin::{DebugMode, Target, TargetResource, events::{SpawnHint, SpawnTarget, TargetHit}, target::FadeIn, target_material::TargetMaterial},
+    AppState, GameState,
+    scoreing::Lifetime,
+    target_plugin::{
+        DebugMode, Target, TargetResource,
+        events::{SpawnHint, SpawnTarget, TargetHit},
+        target::FadeIn,
+        target_material::TargetMaterial,
+    },
 };
 
 pub struct CurvePlugin;
@@ -16,18 +27,16 @@ impl Plugin for CurvePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (
-                curve_marker_gizmos.run_if(resource_equals(DebugMode(true))),
-            ),
+            (curve_marker_gizmos.run_if(resource_equals(DebugMode(true))),),
         )
-            .insert_gizmo_config(
-                CurveGizmo,
-                GizmoConfig {
-                    render_layers: bevy::camera::visibility::RenderLayers::layer(1),
-                    ..default()
-                },
-            )
-            .add_observer(on_spawn_hint);
+        .insert_gizmo_config(
+            CurveGizmo,
+            GizmoConfig {
+                render_layers: bevy::camera::visibility::RenderLayers::layer(1),
+                ..default()
+            },
+        )
+        .add_observer(on_spawn_hint);
     }
 }
 
@@ -45,37 +54,54 @@ pub struct CurveMarker {
 pub struct CurveGizmo;
 
 fn curve_marker_gizmos(
-    q_curve_marker: Query<(Entity, &mut CurveMarker)>,
+    q_curve_marker: Query<(Entity, (&Visibility, &mut CurveMarker))>,
     mut gizmos: Gizmos<CurveGizmo>,
 ) {
-    for (_, curve) in q_curve_marker {
+    for (_, (vis, curve)) in q_curve_marker {
+        let color = if Visibility::Visible == *vis {
+            BLUE_300
+        } else {
+            GREEN_400
+        };
+
         gizmos.curve_3d(
             &curve.curve,
-            (0..100).map(|i| (i as f32 / 100.) * curve.curve.domain().end()),
-            BLUE_300,
+            (0..=400).map(|i| (i as f32 / 400.) * curve.curve.domain().end()),
+            color,
         );
     }
 }
 
-fn on_spawn_hint(e: On<SpawnHint>, q_curve_marker: Query<(Entity, &mut CurveMarker)>, mut commands: Commands, q_marker: Query<&super::Marker>,
+fn on_spawn_hint(
+    e: On<SpawnHint>,
+    q_curve_marker: Query<(Entity, &mut CurveMarker)>,
+    mut commands: Commands,
+    q_marker: Query<&super::Marker>,
     mut animation_clips: ResMut<Assets<AnimationClip>>,
     mut animation_graphs: ResMut<Assets<AnimationGraph>>,
     mut target_resource: Res<TargetResource>,
     time: Res<Time<Virtual>>,
 ) {
-            let marker = q_marker.get(e.event_target()).unwrap();
-            let Ok((entity,curve_marker)) = q_curve_marker.get(e.event_target()) else {
-                return;
-            };
+    let marker = q_marker.get(e.event_target()).unwrap();
+    let Ok((entity, curve_marker)) = q_curve_marker.get(e.event_target()) else {
+        return;
+    };
 
-            let preempt = marker.spawn_time.remaining();
-            // show curve
+    let preempt = marker.spawn_time.remaining();
+    // show curve
 
-            // TODO: new line material
-            let mesh_curve = curve_marker.curve.clone().reparametrize(Interval::new(0.,(curve_marker.curve.domain().end() / curve_marker.slides as f32)).unwrap(), |f| {f});
-            let mesh = create_curve_hint(mesh_curve);
-            info!("spawn hint");
-            commands.spawn_scene(bsn! {
+    // TODO: new line material
+    let mesh_curve = curve_marker.curve.clone().reparametrize(
+        Interval::new(
+            0.,
+            (curve_marker.curve.domain().end() / curve_marker.slides as f32),
+        )
+        .unwrap(),
+        |f| f,
+    );
+    let mesh = create_curve_hint(mesh_curve);
+    info!("spawn hint");
+    commands.spawn_scene(bsn! {
                 Mesh3d(asset_value(mesh))
                 Transform {
                     translation: vec3(0.,0.,-50.)
@@ -83,29 +109,26 @@ fn on_spawn_hint(e: On<SpawnHint>, q_curve_marker: Query<(Entity, &mut CurveMark
                 MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial{unlit: true, ..StandardMaterial::from_color(GREEN_400)}))
                 template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
             });
-            
 
+    // INFO: Spawns curve
+    let mut clip = AnimationClip::default();
+    let curve = AnimatableCurve::new(
+        animated_field!(Transform::translation),
+        curve_marker.curve.clone(),
+    );
 
-            // INFO: Spawns curve
-            let mut clip = AnimationClip::default();
-            let curve = AnimatableCurve::new(
-                animated_field!(Transform::translation),
-                curve_marker.curve.clone(),
-            );
+    let anim_id = bevy::animation::AnimationTargetId(Uuid::from_u128(entity.index_u32() as u128));
+    clip.add_curve_to_target(anim_id, curve);
+    clip.set_duration(curve_marker.duration);
 
-            let anim_id =
-                bevy::animation::AnimationTargetId(Uuid::from_u128(entity.index_u32() as u128));
-            clip.add_curve_to_target(anim_id, curve);
-            clip.set_duration(curve_marker.duration);
+    let (animation_graph, animation_node_index) =
+        AnimationGraph::from_clip(animation_clips.add(clip));
 
-            let (animation_graph, animation_node_index) =
-                AnimationGraph::from_clip(animation_clips.add(clip));
+    let mut player = AnimationPlayer::default();
 
-            let mut player = AnimationPlayer::default();
-
-            let anim_duration = Duration::from_secs_f32(curve_marker.duration);
-            let end_time = time.elapsed() + preempt + anim_duration;
-            let mut slider = commands.entity(entity)
+    let anim_duration = Duration::from_secs_f32(curve_marker.duration);
+    let end_time = time.elapsed() + preempt + anim_duration;
+    let mut slider = commands.entity(entity)
                 .apply_scene(bsn! {
                     Mesh3d({target_resource.mesh.clone()})
                     MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ring_width: 0.1}))
@@ -132,18 +155,15 @@ fn on_spawn_hint(e: On<SpawnHint>, q_curve_marker: Query<(Entity, &mut CurveMark
         })
                 .id();
 
-            commands
-                .entity(slider)
-                .insert((anim_id, AnimatedBy(slider)));
-            let mut delay = commands.delayed();
+    commands
+        .entity(slider)
+        .insert((anim_id, AnimatedBy(slider)));
+    let mut delay = commands.delayed();
 
-
-            trace!("Spawned Curve");
-
+    trace!("Spawned Curve");
 }
 
 fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
-
     // TODO: We need to take the curve and compute the tangent
     // -> Then at each sample point add to vertex to the positive and negative normal at half_width
     // -> Finally add end caps and tessellate the shape
@@ -156,7 +176,6 @@ fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
     let mut t = start;
 
     let step_size = curve.domain().length() / 200.;
-
 
     let mut vertices_top = vec![];
     let mut vertices_bottom = vec![];
@@ -179,8 +198,6 @@ fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
         vertices_top.push((sample + (v * half_width), v));
         vertices_bottom.push(sample + (-v * half_width));
 
-
-
         // Advance by stepsize
         t += step_size;
     }
@@ -188,27 +205,24 @@ fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
     // INFO: Loop slides is causing issues
     let mut mesh = PMesh::<u32>::new();
     mesh.fill(0.01, |builder| {
-        // builder.begin_here();
+        builder.begin(vertices_top[0].0.xy());
         for vert in vertices_top {
-            builder.add_circle(vert.0.xy(), 0.1, Winding::Positive);
-            // builder.line_to(vert.0.xy());
+            // builder.add_circle(vert.0.xy(), 0.1, Winding::Positive);
+            builder.line_to(vert.0.xy());
         }
-        builder.add_circle(vec2(0.,0.), 1., Winding::Positive);
+        //builder.add_circle(vec2(0., 0.), 1., Winding::Positive);
+
         // for vert in vertices_bottom.iter().rev() {
         //     builder.line_to(vert.xy());
         // }
-        // builder.close();
+        builder.close();
     });
-    
-    
+
     mesh.add_backfaces().to_bevy(RenderAssetUsages::all())
 }
 
 #[test]
 fn curve_mesh() {
-    let linear_curve = FunctionCurve::new(Interval::UNIT, |t| {
-        vec3(t,t,0.)
-    });
+    let linear_curve = FunctionCurve::new(Interval::UNIT, |t| vec3(t, t, 0.));
     create_curve_hint(linear_curve);
-    
 }
