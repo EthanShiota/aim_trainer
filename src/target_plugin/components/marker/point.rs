@@ -54,7 +54,7 @@ pub fn on_spawn_hint(
     let miss_duration = Duration::from_millis(400);
 
     // Spawn Target
-    let _target = commands.spawn_scene(bsn! {
+    let _target = commands.entity(entity).apply_scene(bsn! {
         target::FadeIn({Timer::new(preempt,TimerMode::Once)})
         Mesh3d({target_resource.mesh.clone()})
         MeshMaterial3d::<TargetMaterial>(asset_value(mat))

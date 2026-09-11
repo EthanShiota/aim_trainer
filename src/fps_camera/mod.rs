@@ -98,17 +98,22 @@ pub struct Hovered(pub usize);
 fn update_raycast(
     mut ray_cast: MeshRayCast,
     q_cam: Query<&Transform, With<FPSCamera>>,
-    q_target: Query<(), With<Target>>,
+    q_target: Query<&Target>,
     mut commands: Commands,
 ) {
     for cam in q_cam.iter() {
+        // Cast hovered ray from fps camera look direction
         let ray = Ray3d::new(cam.translation, cam.forward());
+
+        // Filter out non target meshes
         let filter = |entity| q_target.contains(entity);
         let mut settings = MeshRayCastSettings::default().with_filter(&filter);
 
         let results = ray_cast.cast_ray(ray, &settings);
 
         for (idx, (entity, _hit)) in results.iter().enumerate() {
+            // Hovered idx is likely non-deterministic as targets can be at identical distances from the camera
+            // or it is incorrect way of ordering hit priority
             commands.entity(*entity).insert(Hovered(idx));
         }
     }

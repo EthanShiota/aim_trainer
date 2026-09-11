@@ -37,7 +37,7 @@ use target_plugin::messages::{FireWeapon, FireWeaponHeld};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::target_plugin::events::{TargetDestroyed, TargetHit};
-use crate::target_plugin::{BeatMap, Target, TargetMaterial, TargetResource};
+use crate::target_plugin::{BeatMap, Marker, Target, TargetMaterial, TargetResource};
 
 #[derive(Resource, Clone, Copy)]
 pub struct GameSettings {
@@ -518,12 +518,12 @@ fn light_and_cameras(
     ));
 }
 
-fn fire_weapon(q_hit: Query<(Entity, &Hovered), With<Target>>, mut commands: Commands) {
+fn fire_weapon(
+    q_hit: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
+    mut commands: Commands,
+) {
     let mut hits: Vec<_> = q_hit.into_iter().collect();
-    if hits.len() > 1 {
-        info!("{:?}", hits.iter().map(|(_, h)| h.0).collect::<Vec<_>>());
-    }
-    hits.sort_by_key(|(_, h)| h.0);
+    hits.sort_by_key(|elm| elm.1);
     if let Some((t, _)) = hits.first() {
         commands.entity(*t).trigger(TargetHit);
     }
@@ -531,15 +531,12 @@ fn fire_weapon(q_hit: Query<(Entity, &Hovered), With<Target>>, mut commands: Com
 
 fn fire_weapon_held(
     In(delta): In<Duration>,
-    q_hit: Query<(Entity, &mut Target, &Hovered)>,
+    q_hit: Query<(Entity, &mut Target, &Hovered, &Marker)>,
     mut commands: Commands,
 ) {
     let mut hits: Vec<_> = q_hit.into_iter().collect();
-    if hits.len() > 1 {
-        info!("{:?}", hits.iter().map(|(_, _, h)| h.0).collect::<Vec<_>>());
-    }
-    hits.sort_by_key(|(_, _, h)| h.0);
-    if let Some((e, t, _)) = hits.get_mut(0)
+    hits.sort_by_key(|k| k.3);
+    if let Some((e, t, _, _)) = hits.first_mut()
         && let Target::Duration(dur) = t.as_mut()
     {
         *dur = dur.saturating_sub(delta);

@@ -106,6 +106,7 @@ fn on_spawn_hint(
                 Transform {
                     translation: vec3(0.,0.,-50.)
                 }
+                DespawnOnExit::<AppState>(AppState::InGame)
                 MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial{unlit: true, ..StandardMaterial::from_color(GREEN_400)}))
                 template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
             });
@@ -158,7 +159,6 @@ fn on_spawn_hint(
     commands
         .entity(slider)
         .insert((anim_id, AnimatedBy(slider)));
-    let mut delay = commands.delayed();
 
     trace!("Spawned Curve");
 }
