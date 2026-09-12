@@ -48,7 +48,7 @@ pub fn on_spawn_hint(
         // TODO: Target Base Color
         color: RED_800.into(),
         ring: target_resource.ring_start,
-        ring_width: 0.2,
+        ..Default::default()
     };
 
     let miss_duration = Duration::from_millis(400);

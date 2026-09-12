@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 mod edit_mode;
 mod effects;
 mod fps_camera;
@@ -37,7 +38,7 @@ use target_plugin::messages::{FireWeapon, FireWeaponHeld};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::target_plugin::events::{TargetDestroyed, TargetHit};
-use crate::target_plugin::{BeatMap, Marker, Target, TargetMaterial, TargetResource};
+use crate::target_plugin::{BeatMap, DebugMode, Marker, Target, TargetMaterial, TargetResource};
 
 #[derive(Resource, Clone, Copy)]
 pub struct GameSettings {
@@ -102,7 +103,8 @@ fn main() {
             edit_mode::EditPlugin,
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
-            WorldInspectorPlugin::default(),
+            effects::EffectPlugin,
+            WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
         ))
         .add_plugins(MaterialPlugin::<SkyMaterial>::default())
         // INFO: State

@@ -9,11 +9,10 @@ use bevy::{
     prelude::*,
     render::render_resource::AsBindGroup,
 };
-use dasp::sample::ToSample;
 
 use crate::{fps_camera::Hovered, target_plugin::Target};
 
-#[derive(AsBindGroup, Debug, Clone, Asset, Component, Reflect, Default)]
+#[derive(AsBindGroup, Debug, Clone, Asset, Component, Reflect)]
 pub struct TargetMaterial {
     #[uniform(100)]
     pub color: LinearRgba,
@@ -21,6 +20,8 @@ pub struct TargetMaterial {
     pub ring: f32,
     #[uniform(102)]
     pub ring_width: f32,
+    #[uniform(103)]
+    pub hovered: i32,
 }
 
 impl Material for TargetMaterial {
@@ -29,6 +30,17 @@ impl Material for TargetMaterial {
     }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Premultiplied
+    }
+}
+
+impl Default for TargetMaterial {
+    fn default() -> Self {
+        TargetMaterial {
+            hovered: 0,
+            ring: 0.1,
+            ring_width: 0.1,
+            color: GREEN_300.into(),
+        }
     }
 }
 

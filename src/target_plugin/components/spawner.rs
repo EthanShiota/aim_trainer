@@ -66,7 +66,7 @@ pub fn debug_spawn_target(
         MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {
             color: RED_800.into(),
             ring: 1.,
-            ring_width: 0.1,
+            ..default()
         }))
         Target
         template_value(player_camera_transform.with_translation(
@@ -110,7 +110,7 @@ pub fn spawner_loop(
                     MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {
                         color: WHITE_SMOKE.into(),
                         ring: 1.,
-                        ring_width: 0.1,
+                        ..Default::default()
                     }))
                 });
             });

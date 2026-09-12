@@ -44,6 +44,9 @@ impl Marker {
             preempt: Timer::new(preempt_timer, TimerMode::Once),
         }
     }
+    pub fn time(&self) -> Duration {
+        self.spawn_time.duration()
+    }
 }
 
 impl Ord for Marker {

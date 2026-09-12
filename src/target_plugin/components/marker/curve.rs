@@ -132,7 +132,7 @@ fn on_spawn_hint(
     let mut slider = commands.entity(entity)
                 .apply_scene(bsn! {
                     Mesh3d({target_resource.mesh.clone()})
-                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ring_width: 0.1}))
+                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ..default()}))
                     Transform {
                         translation: {curve_marker.curve.sample_unchecked(0.)}
                     }
@@ -142,11 +142,10 @@ fn on_spawn_hint(
                     template_value(player)
                     AnimationGraphHandle(asset_value(animation_graph))
                     template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
-                }).observe(move |e: On<SpawnTarget>, mut q_player: Query<&mut AnimationPlayer>, mut commands: Commands, time: Res<Time<Virtual>>| {
+                }).observe(move |e: On<SpawnTarget>, mut q_player: Query<&mut AnimationPlayer>, mut commands: Commands, time: Res<Time<Virtual>>, q_target_material: Query<&mut MeshMaterial3d<TargetMaterial>>, mut target_material: ResMut<Assets<TargetMaterial>>| {
                     let speedup = anim_duration.div_duration_f32(time.elapsed().abs_diff(end_time));
                     if let Ok(mut p) = q_player.get_mut(e.event_target()) {
                         p.start(animation_node_index).set_speed(speedup);
-                        
                     }
                     commands.entity(e.observer()).despawn();
                 }).observe(|e: On<TargetHit>, mut commands:  Commands| {
