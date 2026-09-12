@@ -21,6 +21,10 @@
 - [x] Volume
 - [ ] save settings somewhere
 
+## UX
+
+- [ ] Import beatmap dialog or flow
+
 ## Bugs
 
 Better logs
