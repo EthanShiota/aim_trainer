@@ -20,7 +20,7 @@ impl Plugin for EffectPlugin {
 }
 
 #[derive(Component)]
-struct Active;
+pub struct Active;
 
 fn add_effect(
     hovered: Query<(Entity, &Marker, &MeshMaterial3d<TargetMaterial>), With<Hovered>>,

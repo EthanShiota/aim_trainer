@@ -17,7 +17,6 @@ use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::Source;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
-use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -31,14 +30,11 @@ use bevy_egui::prelude::*;
 use bevy_skein::SkeinPlugin;
 
 use bevy::prelude::*;
-use bevy::text::TextSection;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
-
-use target_plugin::messages::{FireWeapon, FireWeaponHeld};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::target_plugin::events::{TargetDestroyed, TargetHit};
-use crate::target_plugin::{BeatMap, DebugMode, Marker, Target, TargetMaterial, TargetResource};
+use crate::target_plugin::{BeatMap, DebugMode, Marker, Target, TargetResource};
 
 #[derive(Resource, Clone, Copy)]
 pub struct GameSettings {
@@ -533,17 +529,15 @@ fn fire_weapon(
 
 fn fire_weapon_held(
     In(delta): In<Duration>,
-    q_hit: Query<(Entity, &mut Target, &Hovered, &Marker)>,
+    mut q_hit: Query<(Entity, &mut Target), (With<Hovered>, With<effects::Active>)>,
     mut commands: Commands,
 ) {
-    let mut hits: Vec<_> = q_hit.into_iter().collect();
-    hits.sort_by_key(|k| k.3);
-    if let Some((e, t, _, _)) = hits.first_mut()
-        && let Target::Duration(dur) = t.as_mut()
-    {
-        *dur = dur.saturating_sub(delta);
-        if dur.is_zero() {
-            commands.entity(*e).trigger(TargetDestroyed);
+    for (entity, mut target) in q_hit.iter_mut() {
+        if let Target::Duration(dur) = target.as_mut() {
+            *dur = dur.saturating_sub(delta);
+            if dur.is_zero() {
+                commands.entity(entity).trigger(TargetDestroyed);
+            }
         }
     }
 }
