@@ -8,6 +8,7 @@
 - [x] Return to menu
 - [ ] Scoring
 - [x] Approach Window
+- [ ] Sound effect for sliders
 - [ ] auto play showcase mode
 
 ## Visuals
@@ -23,7 +24,7 @@
 
 ## UX
 
-- [ ] Import beatmap dialog or flow
+- [x] Import beatmap dialog or flow
 
 ## Bugs
 

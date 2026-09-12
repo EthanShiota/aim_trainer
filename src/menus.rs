@@ -1,4 +1,6 @@
 use std::{
+    error::Error,
+    fs, io,
     ops::Deref,
     path::{Path, PathBuf},
     time,
@@ -17,6 +19,7 @@ use bevy_egui::{
 };
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rfd::FileDialog;
+use zip::{ZipArchive, result::ZipError};
 
 use crate::{AppState, GameSettings, scenarios};
 use parser::BeatMapOsu;
@@ -93,8 +96,8 @@ fn main_menu(
     // ctx.global_style_mut(|style| {
     //     style.visuals = vis;
     // });
+    let beatmap_dir = "osu_beatmaps";
     if beat_maps.is_empty() {
-        let beatmap_dir = "osu_beatmaps";
         *beat_maps = serialize_beatmaps(beatmap_dir);
     }
 
@@ -111,6 +114,8 @@ fn main_menu(
                 // Dialog can return None
                 if let Some(path) = filepath {
                     debug!("path: {path:?}");
+                    unzip_beatmap(&Path::new(beatmap_dir), &path).unwrap();
+                    *beat_maps = serialize_beatmaps(beatmap_dir);
                 }
                 commands.entity(entity).remove::<SelectedFile>();
             }
@@ -131,6 +136,84 @@ fn main_menu(
         }
     });
 
+    Ok(())
+}
+
+fn unzip_beatmap(base_dir: &Path, beatmap_path: &Path) -> Result<(), Box<dyn Error>> {
+    // Validate the path without requiring the file to exist
+    // let out_root = candidate_path.components().collect::<std::path::PathBuf>();
+    // if !out_root.starts_with(&base_dir) {
+    //     error!(
+    //         "Error: path {:?} escapes the allowed directory.",
+    //         candidate_path.display()
+    //     );
+    //     return Err("Invalid path".into());
+    // }
+
+    let mut archive = std::fs::File::open(beatmap_path)
+        .map_err(ZipError::from)
+        .and_then(ZipArchive::new)?;
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let comment = file.comment();
+        if !comment.is_empty() {
+            trace!("{comment}");
+        }
+        if let Some(out_path) = file.enclosed_name() {
+            let out_path = base_dir
+                .join(beatmap_path.file_name().unwrap())
+                .join(out_path);
+            if file.is_dir() {
+                if let Err(e) = fs::create_dir_all(&out_path) {
+                    error!("error creating directory: {e:?}");
+                }
+            } else {
+                if let Some(p) = out_path.parent()
+                    && !p.exists()
+                    && let Err(e) = fs::create_dir_all(p)
+                {
+                    error!(
+                        "Error: unable to create parent directory {p:?} of file {}: {e}",
+                        p.display()
+                    );
+                    continue;
+                }
+                match fs::File::create(&out_path)
+                    .and_then(|mut outfile| io::copy(&mut file, &mut outfile))
+                {
+                    Ok(bytes_extracted) => {
+                        println!(
+                            "File {} extracted to {:?} ({bytes_extracted} bytes)",
+                            i,
+                            out_path.display(),
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            "Error: unable to extract file {i} to {:?}: {e}",
+                            out_path.display()
+                        );
+                        continue;
+                    }
+                }
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+
+                if let Some(mode) = file.unix_mode()
+                    && let Err(e) = fs::set_permissions(&out_path, fs::Permissions::from_mode(mode))
+                {
+                    error!(
+                        "Error: unable to change permissions of file {i} ({:?}): {e}",
+                        out_path.display()
+                    );
+                }
+            }
+        } else {
+            info!("skipping file with invalid path: {}", file.name());
+        }
+    }
     Ok(())
 }
 
