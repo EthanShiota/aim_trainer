@@ -100,8 +100,9 @@ fn on_spawn_hint(
         |f| f,
     );
     let mesh = create_curve_hint(mesh_curve);
-    info!("spawn hint");
+    debug!("spawn hint");
     commands.spawn_scene(bsn! {
+                Name("Curve Path")
                 Mesh3d(asset_value(mesh))
                 Transform {
                     translation: vec3(0.,0.,-50.)
@@ -131,13 +132,11 @@ fn on_spawn_hint(
     let end_time = time.elapsed() + preempt + anim_duration;
     let mut slider = commands.entity(entity)
                 .apply_scene(bsn! {
-                    Mesh3d({target_resource.mesh.clone()})
-                    MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {color: GREEN_400.into(), ring: 1., ..default()}))
+                    {target_resource.target_scene()}
                     Transform {
                         translation: {curve_marker.curve.sample_unchecked(0.)}
                     }
                     FadeIn({Timer::new(preempt, TimerMode::Once)})
-                    DespawnOnExit::<AppState>(AppState::InGame)
                     template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
                     template_value(player)
                     AnimationGraphHandle(asset_value(animation_graph))
@@ -145,8 +144,11 @@ fn on_spawn_hint(
                 }).observe(move |e: On<SpawnTarget>, mut q_player: Query<&mut AnimationPlayer>, mut commands: Commands, time: Res<Time<Virtual>>, q_target_material: Query<&mut MeshMaterial3d<TargetMaterial>>, mut target_material: ResMut<Assets<TargetMaterial>>| {
                     let speedup = anim_duration.div_duration_f32(time.elapsed().abs_diff(end_time));
                     if let Ok(mut p) = q_player.get_mut(e.event_target()) {
+                        debug!("begin curve: {} animation with speedup: {speedup}", e.event_target());
                         p.start(animation_node_index).set_speed(speedup);
                     }
+                    commands.entity(e.event_target()).insert(Target::Duration(time.elapsed().abs_diff(end_time)));
+
                     commands.entity(e.observer()).despawn();
                 }).observe(|e: On<TargetHit>, mut commands:  Commands| {
                     commands.entity(e.event_target()).trigger(SpawnTarget);
@@ -159,7 +161,7 @@ fn on_spawn_hint(
         .entity(slider)
         .insert((anim_id, AnimatedBy(slider)));
 
-    trace!("Spawned Curve");
+    debug!("spawn curve {slider:?}");
 }
 
 fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {

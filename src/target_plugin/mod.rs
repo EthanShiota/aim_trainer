@@ -13,16 +13,10 @@ pub use target_material::TargetMaterial;
 #[derive(Resource, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct DebugMode(pub bool);
 
-#[derive(Resource)]
-pub struct TargetResource {
-    // base target mesh
-    pub mesh: Handle<Mesh>,
-    pub ring_start: f32,
-    pub ring_end: f32,
-    pub easing: EasingCurve<f32>,
-}
+mod target_resource;
+pub use target_resource::TargetResource;
 
-use crate::{AppState, GameState};
+use crate::AppState;
 
 pub struct TargetPlugin;
 
