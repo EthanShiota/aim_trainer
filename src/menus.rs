@@ -1,16 +1,22 @@
-use std::time;
+use std::{
+    ops::Deref,
+    path::{Path, PathBuf},
+    time,
+};
 
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
     color::palettes::tailwind::*,
     prelude::*,
     render::render_resource::BlendState,
+    tasks::{Task, futures::check_ready},
 };
 use bevy_egui::{
     egui::{Color32, Ui, UiBuilder},
     prelude::*,
 };
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use rfd::FileDialog;
 
 use crate::{AppState, GameSettings, scenarios};
 use parser::BeatMapOsu;
@@ -63,10 +69,14 @@ fn color(c: Srgba) -> Color32 {
     Color32::from_rgba_unmultiplied_const(r, g, b, a)
 }
 
+#[derive(Component)]
+struct SelectedFile(Task<Option<PathBuf>>);
+
 fn main_menu(
     mut contexts: EguiContexts,
     mut commands: Commands,
     mut beat_maps: Local<Vec<Vec<BeatMapOsu>>>,
+    mut selected_file: Query<(&mut SelectedFile, Entity)>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     // ctx.global_style_mut(|style| {
@@ -84,27 +94,28 @@ fn main_menu(
     //     style.visuals = vis;
     // });
     if beat_maps.is_empty() {
-        let now = time::Instant::now();
-        let mut count = 0;
-        warn!("begin serialization");
         let beatmap_dir = "osu_beatmaps";
-        for file in std::fs::read_dir(beatmap_dir).unwrap().flat_map(|w| w.ok()) {
-            let mut versions = vec![];
-            for ent in file.path().read_dir().unwrap() {
-                if let Some(map) = ent.ok().and_then(|dir| BeatMapOsu::new(dir.path()).ok()) {
-                    count += 1;
-                    versions.push(map);
-                }
-            }
-            beat_maps.push(versions);
-        }
-        warn!(
-            "end serialization of {count} maps in {} secs",
-            time::Instant::now().duration_since(now).as_secs_f64()
-        );
+        *beat_maps = serialize_beatmaps(beatmap_dir);
     }
 
-    egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
+    egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
+        // Import new beatmap
+        if ui.button("Import Beatmap").clicked() && selected_file.is_empty() {
+            let thread_pool = bevy::tasks::AsyncComputeTaskPool::get();
+            let task = thread_pool.spawn(async move { FileDialog::new().pick_file() });
+            commands.spawn(SelectedFile(task));
+        }
+
+        for (mut file, entity) in selected_file.iter_mut() {
+            if let Some(filepath) = check_ready(&mut file.0) {
+                // Dialog can return None
+                if let Some(path) = filepath {
+                    debug!("path: {path:?}");
+                }
+                commands.entity(entity).remove::<SelectedFile>();
+            }
+        }
+        // Beatmap select
         for versions in beat_maps.iter() {
             if !versions.is_empty() {
                 egui::CollapsingHeader::new(&versions[0].metadata.title).show(ui, |ui| {
@@ -114,11 +125,6 @@ fn main_menu(
                             commands.set_state(AppState::InGame);
                             commands.run_system_cached_with(scenarios::osu, beat_map.clone());
                         }
-                        if button.secondary_clicked() {
-                            commands.set_state(AppState::InGame);
-                            commands
-                                .run_system_cached_with(scenarios::debug_scene, beat_map.clone());
-                        }
                     }
                 });
             }
@@ -126,4 +132,27 @@ fn main_menu(
     });
 
     Ok(())
+}
+
+// TODO: Remove unwraps
+fn serialize_beatmaps(beatmap_dir: &str) -> Vec<Vec<BeatMapOsu>> {
+    let now = time::Instant::now();
+    let mut count = 0;
+    debug!("begin serialization");
+    let mut beat_maps = vec![];
+    for file in std::fs::read_dir(beatmap_dir).unwrap().flat_map(|w| w.ok()) {
+        let mut versions = vec![];
+        for ent in file.path().read_dir().unwrap() {
+            if let Some(map) = ent.ok().and_then(|dir| BeatMapOsu::new(dir.path()).ok()) {
+                count += 1;
+                versions.push(map);
+            }
+        }
+        beat_maps.push(versions);
+    }
+    debug!(
+        "end serialization of {count} maps in {} secs",
+        time::Instant::now().duration_since(now).as_secs_f64()
+    );
+    beat_maps
 }
