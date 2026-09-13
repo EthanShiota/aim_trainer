@@ -1,3 +1,4 @@
+use super::Hovered;
 use std::f32::consts::PI;
 
 use bevy::{
@@ -28,6 +29,9 @@ pub enum SpawnerState {
     Inactive,
 }
 
+#[derive(SystemSet, Hash, Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq)]
+pub struct TargetSchedule;
+
 impl Plugin for TargetPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_plugin)
@@ -37,6 +41,13 @@ impl Plugin for TargetPlugin {
             .add_plugins(MaterialPlugin::<TargetMaterial>::default())
             .add_plugins(MarkerPlugin)
             .add_plugins(TimingRingPlugin)
+            .add_systems(
+                RunFixedMainLoop,
+                add_effect
+                    .in_set(TargetSchedule)
+                    .before(RunFixedMainLoopSystems::FixedMainLoop),
+            )
+            .add_systems(Update, sync_effect)
             // INFO: Gizmo
             .insert_gizmo_config(
                 SpawnerGizmo,
@@ -102,4 +113,44 @@ fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
         ring_end: PI / 2.,
         easing: EasingCurve::new(0., 1., EaseFunction::Linear),
     });
+}
+
+#[derive(Component)]
+pub struct Active;
+
+fn add_effect(
+    hovered: Query<(Entity, &Marker, &MeshMaterial3d<TargetMaterial>), With<Hovered>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut commands: Commands,
+) {
+    if mouse.just_pressed(MouseButton::Left) {
+        if let Some(target) = hovered
+            .into_iter()
+            .sort_by_key::<&Marker, _>(|m| m.time())
+            .next()
+        {
+            commands.entity(target.0).insert(Active);
+        }
+    }
+}
+
+fn sync_effect(
+    active: Query<(&MeshMaterial3d<TargetMaterial>, Entity), (With<Active>, With<Hovered>)>,
+    mut target_material: ResMut<Assets<TargetMaterial>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut commands: Commands,
+) {
+    let active_materials: std::collections::HashMap<AssetId<TargetMaterial>, Entity> =
+        active.into_iter().map(|(mat, e)| (mat.id(), e)).collect();
+    let pressed = mouse.pressed(MouseButton::Left);
+    for (id, material) in target_material.iter_mut() {
+        if pressed && active_materials.contains_key(&id) {
+            material.hovered = 1;
+        } else {
+            material.hovered = 0;
+            active_materials.get(&id).map(|entity| {
+                commands.entity(*entity).remove::<Active>();
+            });
+        }
+    }
 }

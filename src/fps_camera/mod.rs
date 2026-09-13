@@ -46,7 +46,7 @@ pub struct FPSCamera {
     pub yaw: f32,
 }
 
-use super::effects::EffectSchedule;
+use super::target_plugin::TargetSchedule;
 pub struct FPSCameraPlugin;
 impl Plugin for FPSCameraPlugin {
     fn build(&self, app: &mut App) {
@@ -56,7 +56,7 @@ impl Plugin for FPSCameraPlugin {
                 (update, update_raycast)
                     .chain()
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop)
-                    .before(EffectSchedule),
+                    .before(TargetSchedule),
             )
             .add_systems(PostUpdate, remove_hovered);
     }

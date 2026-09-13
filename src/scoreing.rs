@@ -49,18 +49,22 @@ fn tick(
 fn setup(mut commands: Commands) {
     commands.insert_resource(Score::default());
     commands.spawn_scene(bsn! {
-        ScoreDisplay
         Node {
             display: Display::Flex,
             flex_direction: FlexDirection::Row
-            align_self: AlignSelf::Center,
+            align_self: AlignSelf::Start,
+            justify_content: JustifyContent::Center,
             width: vw(100.),
         }
-        Text("hello")
-        TextFont {
-            font_size: px(44.),
-        }
-        TextColor(BLUE_300)
+        Children [
+            ScoreDisplay
+            Text("hello")
+            TextFont {
+                font_size: px(44.),
+            }
+                TextColor(BLUE_300)
+
+        ]
         DespawnOnExit::<AppState>(AppState::InGame)
     });
 }

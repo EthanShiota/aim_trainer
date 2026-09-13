@@ -1,14 +1,12 @@
 use std::{
     error::Error,
     fs, io,
-    ops::Deref,
     path::{Path, PathBuf},
     time,
 };
 
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
-    color::palettes::tailwind::*,
     prelude::*,
     render::render_resource::BlendState,
     tasks::{Task, futures::check_ready},
@@ -17,7 +15,6 @@ use bevy_egui::{
     egui::{Color32, Ui, UiBuilder},
     prelude::*,
 };
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rfd::FileDialog;
 use zip::{ZipArchive, result::ZipError};
 
@@ -162,7 +159,14 @@ fn unzip_beatmap(base_dir: &Path, beatmap_path: &Path) -> Result<(), Box<dyn Err
         if let Some(out_path) = file.enclosed_name() {
             let out_path = base_dir
                 .join(beatmap_path.file_name().unwrap())
-                .join(out_path);
+                .join(out_path)
+                .components()
+                .collect::<std::path::PathBuf>();
+            if !out_path.starts_with(base_dir) {
+                error!("error path escapes base dir: {out_path:?}");
+                return Err("Path escapes base dir".into());
+            }
+
             if file.is_dir() {
                 if let Err(e) = fs::create_dir_all(&out_path) {
                     error!("error creating directory: {e:?}");

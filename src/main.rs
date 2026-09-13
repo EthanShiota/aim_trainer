@@ -99,7 +99,6 @@ fn main() {
             edit_mode::EditPlugin,
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
-            effects::EffectPlugin,
             WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
         ))
         .add_plugins(MaterialPlugin::<SkyMaterial>::default())
@@ -168,9 +167,6 @@ enum EditMode {
     #[default]
     Normal,
 }
-
-#[derive(Component, Default, Clone)]
-struct ScoreUI;
 
 #[derive(Component, Default, Clone)]
 struct PlayerCamera;
@@ -409,20 +405,6 @@ pub mod transition {
     }
 }
 
-fn score_ui() -> impl Scene {
-    bsn! {
-        ScoreUI
-        Node {
-            top: Val::Px(0.),
-            left: Val::Px(0.),
-        }
-        Text
-        TextFont {
-            font_size: FontSize::Px(50.),
-        }
-    }
-}
-
 fn setup_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -435,7 +417,6 @@ fn setup_ui(
         Transform::default(),
     ));
 
-    commands.spawn_scene(score_ui());
     Ok(())
 }
 
@@ -529,7 +510,7 @@ fn fire_weapon(
 
 fn fire_weapon_held(
     In(delta): In<Duration>,
-    mut q_hit: Query<(Entity, &mut Target), (With<Hovered>, With<effects::Active>)>,
+    mut q_hit: Query<(Entity, &mut Target), (With<Hovered>, With<target_plugin::Active>)>,
     mut commands: Commands,
 ) {
     for (entity, mut target) in q_hit.iter_mut() {
