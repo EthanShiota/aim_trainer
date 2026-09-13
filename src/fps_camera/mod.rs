@@ -5,6 +5,7 @@ use std::f32::{
 };
 
 use bevy::{
+    app::AnimationSystems,
     input::mouse::AccumulatedMouseMotion,
     prelude::*,
     window::{CursorOptions, PrimaryWindow},
@@ -58,7 +59,7 @@ impl Plugin for FPSCameraPlugin {
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop)
                     .before(TargetSchedule),
             )
-            .add_systems(PostUpdate, remove_hovered);
+            .add_systems(PostUpdate, remove_hovered.after(AnimationSystems));
     }
 }
 fn setup(mut q_player_transform: Query<(&Transform, &mut FPSCamera)>) {

@@ -33,8 +33,8 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
-use crate::target_plugin::events::{TargetDestroyed, TargetHit};
-use crate::target_plugin::{BeatMap, DebugMode, Marker, Target, TargetResource};
+use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
+use crate::target_plugin::{Active, BeatMap, DebugMode, Marker, Target, TargetResource};
 
 #[derive(Resource, Clone, Copy)]
 pub struct GameSettings {
@@ -142,6 +142,7 @@ fn main() {
         )
         // INFO: Sync settings to game systems
         .add_systems(OnExit(AppState::Menu), sync_game_settings)
+        .add_observer(on_sound_event)
         .run();
 }
 
@@ -546,5 +547,19 @@ fn sync_game_settings(
 
     for mut sink in q_sink.iter_mut() {
         sink.set_volume(bevy::audio::Volume::Linear(settings.volume));
+    }
+}
+
+fn on_sound_event(
+    e: On<CurveSoundEvent>,
+    hovered: Query<(), (With<Active>, With<Hovered>)>,
+    mut commands: Commands,
+    asset_server: ResMut<AssetServer>,
+) {
+    if hovered.contains(e.0) {
+        commands.spawn((
+            AudioPlayer::new(asset_server.load("audio/Creams.ogg")),
+            PlaybackSettings::REMOVE,
+        ));
     }
 }

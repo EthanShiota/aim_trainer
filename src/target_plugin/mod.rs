@@ -149,7 +149,7 @@ fn sync_effect(
         } else {
             material.hovered = 0;
             active_materials.get(&id).map(|entity| {
-                commands.entity(*entity).remove::<Active>();
+                commands.entity(*entity).try_remove::<Active>();
             });
         }
     }

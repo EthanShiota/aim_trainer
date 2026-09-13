@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{animation::AnimationEvent, prelude::*};
 
 #[derive(EntityEvent)]
 pub struct TargetDestroyed(pub Entity);
@@ -11,3 +11,7 @@ pub struct SpawnTarget(pub Entity);
 
 #[derive(EntityEvent)]
 pub struct SpawnHint(pub Entity);
+
+/// Triggered at the start, end, and when changing direction
+#[derive(AnimationEvent, Clone)]
+pub struct CurveSoundEvent(pub Entity);

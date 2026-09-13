@@ -16,7 +16,7 @@ use crate::{
     scoreing::Lifetime,
     target_plugin::{
         DebugMode, Target, TargetResource,
-        events::{SpawnHint, SpawnTarget, TargetHit},
+        events::{CurveSoundEvent, SpawnHint, SpawnTarget, TargetHit},
         target::FadeIn,
         target_material::TargetMaterial,
     },
@@ -123,6 +123,16 @@ fn on_spawn_hint(
     clip.add_curve_to_target(anim_id, curve);
     clip.set_duration(curve_marker.duration);
 
+    // INFO: add sound events
+    let segment_duration = curve_marker.duration / curve_marker.slides as f32;
+    for slide in 0..=curve_marker.slides {
+        clip.add_event_to_target(
+            anim_id,
+            segment_duration * slide as f32,
+            CurveSoundEvent(entity),
+        );
+    }
+
     let (animation_graph, animation_node_index) =
         AnimationGraph::from_clip(animation_clips.add(clip));
 
@@ -154,8 +164,7 @@ fn on_spawn_hint(
                     commands.entity(e.event_target()).trigger(SpawnTarget);
                     commands.entity(e.observer()).despawn();
 
-        })
-                .id();
+                }).id();
 
     commands
         .entity(slider)

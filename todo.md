@@ -15,6 +15,7 @@
 
 - [x] Hit Leadup
 - [ ] Highlight next target
+- [ ] Better hit effects
 
 ## Settings
 
