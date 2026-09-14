@@ -363,6 +363,7 @@ fn loop_curve(
         .unwrap()
         .repeat(slides / 2)
         .unwrap()
+        .reparametrize(Interval::new(0., curve_duration).unwrap(), |i| i)
         .resample_auto(100 * slides)
         .unwrap()
 }
