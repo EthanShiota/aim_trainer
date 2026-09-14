@@ -14,7 +14,6 @@ use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
 use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use rodio::Source;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
 use std::path::PathBuf;
@@ -172,100 +171,100 @@ enum EditMode {
 #[derive(Component, Default, Clone)]
 struct PlayerCamera;
 
-fn main_menu() -> impl Scene {
-    bsn! {
-        DespawnOnExit::<AppState>(AppState::Menu)
-        Camera2d
-        Node {
-            width: percent(100.),
-            height: percent(100.),
-            display: Display::Flex,
-            align_content: AlignContent::Center,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            flex_direction: FlexDirection::Column,
-        }
-        BackgroundColor(RED_100)
-        Children [
-            (
-                menu_button("Play")
-                on(|_e: On<Pointer<Press>>, _commands: Commands, _path: Option<Res<BeatMapPath>>| {
-                    // let f = FileDialog::default().set_directory("/").pick_file().unwrap();
-                    // commands.insert_resource(BeatMapPath(f));
-                    // commands.set_state(AppState::InGame);
-                    // commands.run_system_cached(scenarios::osu);
-                })
-            ),
-            (
-                menu_button("Exit")
-            )
-
-        ]
-    }
-}
-
-fn menu_button(text: &'static str) -> impl Scene {
-    bsn! {
-        Node {
-            min_width: px(200.),
-            min_height: px(100.),
-            width: percent(40.),
-            height: percent(20.),
-            align_content: AlignContent::Center,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            display: Display::Flex,
-            margin: px(30.),
-            border: px(4.)
-        }
-        BorderColor::all(FUCHSIA_300)
-        // on(|e: On<Pointer<Press>>, mut commands: Commands|{
-        //     commands.entity(e.entity).insert(BackgroundColor(GREEN_300.into()));
-        // })
-        // on(|e: On<Pointer<Release>>, mut commands: Commands|{
-        //     commands.entity(e.entity).insert(BackgroundColor(VIOLET_500.into()));
-        // })
-        Button
-        BackgroundColor(VIOLET_500)
-        Children [
-            Text(text)
-        ]
-    }
-}
-
-fn music_controls(
-    mut contexts: EguiContexts,
-    mut q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
-    sources: Res<Assets<AudioBuffer>>,
-    mut should_resume: Local<bool>,
-    mut stopwatch: ResMut<SceneTimer>,
-) -> Result {
-    egui::Window::new("Controls").show(contexts.ctx_mut()?, |ui| {
-        for (sink, audio_player) in q_sink.iter_mut() {
-            let mut value = sink.position().as_secs_f64();
-            let max = sources
-                .get(&audio_player.0)
-                .unwrap()
-                .total_duration()
-                .unwrap();
-            let slider = ui.add(egui::Slider::new(&mut value, 0.0..=max.as_secs_f64()));
-            if slider.changed() {
-                _ = sink
-                    .try_seek(Duration::from_secs_f64(value))
-                    .inspect_err(|err| println!("{err:?}"));
-                stopwatch.set_elapsed(sink.position());
-            }
-            if slider.drag_started() {
-                *should_resume = !sink.is_paused();
-                sink.pause();
-            }
-            if slider.drag_stopped() && *should_resume {
-                sink.play();
-            }
-        }
-    });
-    Ok(())
-}
+// fn main_menu() -> impl Scene {
+//     bsn! {
+//         DespawnOnExit::<AppState>(AppState::Menu)
+//         Camera2d
+//         Node {
+//             width: percent(100.),
+//             height: percent(100.),
+//             display: Display::Flex,
+//             align_content: AlignContent::Center,
+//             align_items: AlignItems::Center,
+//             justify_content: JustifyContent::Center,
+//             flex_direction: FlexDirection::Column,
+//         }
+//         BackgroundColor(RED_100)
+//         Children [
+//             (
+//                 menu_button("Play")
+//                 on(|_e: On<Pointer<Press>>, _commands: Commands, _path: Option<Res<BeatMapPath>>| {
+//                     // let f = FileDialog::default().set_directory("/").pick_file().unwrap();
+//                     // commands.insert_resource(BeatMapPath(f));
+//                     // commands.set_state(AppState::InGame);
+//                     // commands.run_system_cached(scenarios::osu);
+//                 })
+//             ),
+//             (
+//                 menu_button("Exit")
+//             )
+//
+//         ]
+//     }
+// }
+//
+// fn menu_button(text: &'static str) -> impl Scene {
+//     bsn! {
+//         Node {
+//             min_width: px(200.),
+//             min_height: px(100.),
+//             width: percent(40.),
+//             height: percent(20.),
+//             align_content: AlignContent::Center,
+//             align_items: AlignItems::Center,
+//             justify_content: JustifyContent::Center,
+//             display: Display::Flex,
+//             margin: px(30.),
+//             border: px(4.)
+//         }
+//         BorderColor::all(FUCHSIA_300)
+//         // on(|e: On<Pointer<Press>>, mut commands: Commands|{
+//         //     commands.entity(e.entity).insert(BackgroundColor(GREEN_300.into()));
+//         // })
+//         // on(|e: On<Pointer<Release>>, mut commands: Commands|{
+//         //     commands.entity(e.entity).insert(BackgroundColor(VIOLET_500.into()));
+//         // })
+//         Button
+//         BackgroundColor(VIOLET_500)
+//         Children [
+//             Text(text)
+//         ]
+//     }
+// }
+//
+// fn music_controls(
+//     mut contexts: EguiContexts,
+//     mut q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
+//     sources: Res<Assets<AudioBuffer>>,
+//     mut should_resume: Local<bool>,
+//     mut stopwatch: ResMut<SceneTimer>,
+// ) -> Result {
+//     egui::Window::new("Controls").show(contexts.ctx_mut()?, |ui| {
+//         for (sink, audio_player) in q_sink.iter_mut() {
+//             let mut value = sink.position().as_secs_f64();
+//             let max = sources
+//                 .get(&audio_player.0)
+//                 .unwrap()
+//                 .total_duration()
+//                 .unwrap();
+//             let slider = ui.add(egui::Slider::new(&mut value, 0.0..=max.as_secs_f64()));
+//             if slider.changed() {
+//                 _ = sink
+//                     .try_seek(Duration::from_secs_f64(value))
+//                     .inspect_err(|err| println!("{err:?}"));
+//                 stopwatch.set_elapsed(sink.position());
+//             }
+//             if slider.drag_started() {
+//                 *should_resume = !sink.is_paused();
+//                 sink.pause();
+//             }
+//             if slider.drag_stopped() && *should_resume {
+//                 sink.play();
+//             }
+//         }
+//     });
+//     Ok(())
+// }
 
 fn playing(
     mut commands: Commands,

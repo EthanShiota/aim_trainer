@@ -1,5 +1,25 @@
 #![allow(unused)]
-use bevy_procedural_meshes::*;
+use bevy::color::palettes::css::{RED, TURQUOISE};
+use bevy::color::palettes::tailwind::{RED_900, VIOLET_400};
+use bevy::gltf::{self, GltfMesh, GltfPrimitive};
+use bevy::mesh::{Indices, PrimitiveTopology};
+use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
+use bevy::render::render_resource::AsBindGroup;
+use bevy_egui::egui::color_picker::show_color;
+use procedural_modelling::extensions::bevy::show_faces;
+use procedural_modelling::extensions::bevy::text::Text3dGizmo;
+use procedural_modelling::mesh::{
+    EmptyEdgePayload, EmptyFacePayload, FaceBasics, HalfEdge, HalfEdgeMesh, MeshBasics,
+    MeshHalfEdgeBuilder,
+};
+use procedural_modelling::{
+    extensions::bevy::{BevyMesh3d, BevyMeshType3d32, BevyVertexPayload3d},
+    halfedge::*,
+    math::*,
+    mesh::MeshBuilder,
+    operations::*,
+};
+
 use std::{f32, ops::Range, time::Duration};
 
 use bevy::{
@@ -29,6 +49,8 @@ impl Plugin for CurvePlugin {
             Update,
             (curve_marker_gizmos.run_if(resource_equals(DebugMode(true))),),
         )
+        .add_plugins(MaterialPlugin::<CurveMarkerMaterial>::default())
+        // .add_plugins(WireframePlugin::default())
         .insert_gizmo_config(
             CurveGizmo,
             GizmoConfig {
@@ -37,6 +59,18 @@ impl Plugin for CurvePlugin {
             },
         )
         .add_observer(on_spawn_hint);
+    }
+}
+
+#[derive(AsBindGroup, Clone, Asset, TypePath)]
+pub struct CurveMarkerMaterial {
+    #[uniform(100)]
+    color: LinearRgba,
+}
+
+impl Material for CurveMarkerMaterial {
+    fn fragment_shader() -> bevy::shader::ShaderRef {
+        "shaders/curve_marker.wgsl".into()
     }
 }
 
@@ -64,6 +98,25 @@ fn curve_marker_gizmos(
             GREEN_400
         };
 
+        let curve_info = generate_curve_info(&curve.curve);
+        for (idx, segment) in curve_info.iter().step_by(10).enumerate() {
+            gizmos.arrow(
+                segment.position,
+                segment.position + segment.normal.normalize() * 2.,
+                RED_900,
+            );
+            let samples: Vec<_> = math_helpers::sample_circle(
+                10,
+                Transform::from_rotation_arc(Vec3::NEG_X, segment.normal.normalize())
+                    .with_translation(segment.position)
+                    .compute_affine(),
+                2.,
+            );
+            for sample in samples {
+                gizmos.line(*sample.pos(), segment.position, VIOLET_400);
+            }
+        }
+
         gizmos.curve_3d(
             &curve.curve,
             (0..=400).map(|i| (i as f32 / 400.) * curve.curve.domain().end()),
@@ -80,6 +133,7 @@ fn on_spawn_hint(
     mut animation_clips: ResMut<Assets<AnimationClip>>,
     mut animation_graphs: ResMut<Assets<AnimationGraph>>,
     mut target_resource: Res<TargetResource>,
+    asset_server: ResMut<AssetServer>,
     time: Res<Time<Virtual>>,
 ) {
     let marker = q_marker.get(e.event_target()).unwrap();
@@ -104,11 +158,11 @@ fn on_spawn_hint(
     commands.spawn_scene(bsn! {
                 Name("Curve Path")
                 Mesh3d(asset_value(mesh))
-                Transform {
-                    translation: vec3(0.,0.,-50.)
-                }
+                // Transform {
+                //     translation: vec3(0.,0.,-50.)
+                // }
                 DespawnOnExit::<AppState>(AppState::InGame)
-                MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial{unlit: true, ..StandardMaterial::from_color(GREEN_400)}))
+                MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
                 template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
             });
 
@@ -173,7 +227,13 @@ fn on_spawn_hint(
     debug!("spawn curve {slider:?}");
 }
 
-fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
+struct Segment {
+    position: Vec3,
+    normal: Vec3,
+    v: Vec3,
+}
+
+fn generate_curve_info(curve: impl Curve<Vec3> + Clone) -> Vec<Segment> {
     // TODO: We need to take the curve and compute the tangent
     // -> Then at each sample point add to vertex to the positive and negative normal at half_width
     // -> Finally add end caps and tessellate the shape
@@ -187,8 +247,7 @@ fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
 
     let step_size = curve.domain().length() / 200.;
 
-    let mut vertices_top = vec![];
-    let mut vertices_bottom = vec![];
+    let mut segements: Vec<Segment> = vec![];
 
     // Iterate over curve domain
     while domain.contains(t + step_size) {
@@ -205,30 +264,130 @@ fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
         let v = tangent.rotate_z(f32::consts::FRAC_PI_2).normalize();
         assert_eq!(v.z, 0.);
 
-        vertices_top.push((sample + (v * half_width), v));
-        vertices_bottom.push(sample + (-v * half_width));
+        segements.push(Segment {
+            position: sample,
+            normal: tangent,
+            v,
+        });
 
         // Advance by stepsize
         t += step_size;
     }
 
-    // INFO: Loop slides is causing issues
-    let mut mesh = PMesh::<u32>::new();
-    mesh.fill(0.01, |builder| {
-        builder.begin(vertices_top[0].0.xy());
-        for vert in vertices_top {
-            // builder.add_circle(vert.0.xy(), 0.1, Winding::Positive);
-            builder.line_to(vert.0.xy());
-        }
-        //builder.add_circle(vec2(0., 0.), 1., Winding::Positive);
+    segements
+}
+mod math_helpers {
+    use std::f32::consts::TAU;
 
-        // for vert in vertices_bottom.iter().rev() {
-        //     builder.line_to(vert.xy());
-        // }
-        builder.close();
-    });
+    use bevy::{math::Affine3A, prelude::*};
+    use procedural_modelling::{extensions::bevy::*, math::HasPosition};
 
-    mesh.add_backfaces().to_bevy(RenderAssetUsages::all())
+    pub fn vp(vec: Vec3) -> BevyVertexPayload3d {
+        BevyVertexPayload3d::from_pos(vec)
+    }
+    pub fn yz_circle(i: f32, r: f32) -> Vec3 {
+        vec3(0., f32::sin(i) * r, f32::cos(i) * r)
+    }
+
+    pub fn circle(i: f32, t: Affine3A, r: f32) -> Vec3 {
+        t.transform_point(yz_circle(i * TAU, r))
+    }
+
+    pub fn sample_circle(n: usize, t: Affine3A, r: f32) -> Vec<BevyVertexPayload3d> {
+        (0..n)
+            .map(|i| circle(i as f32 / n as f32, t, r))
+            .map(vp)
+            .collect::<Vec<_>>()
+    }
+}
+
+macro_rules! debug_mesh {
+    ($edge:expr, $mesh:expr) => {
+        debug!("{} Primary: {:?}", line!(), $mesh.edge($edge));
+        debug!("Twin: {:?}", $mesh.edge($edge).twin(&$mesh));
+    };
+}
+
+fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
+    let segments = generate_curve_info(curve);
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    // Add 4 vertices, each with its own position attribute (coordinate in
+    // 3D space), for each of the corners of the parallelogram.
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_POSITION,
+        vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 2.0, 0.0],
+            [2.0, 2.0, 0.0],
+            [1.0, 0.0, 0.0],
+        ],
+    )
+    // Assign a UV coordinate to each vertex.
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_UV_0,
+        vec![[0.0, 1.0], [0.5, 0.0], [1.0, 0.0], [0.5, 1.0]],
+    )
+    // Assign normals (everything points outwards)
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_NORMAL,
+        vec![
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ],
+    )
+    // After defining all the vertices and their attributes, build each triangle using the
+    // indices of the vertices that make it up in a counter-clockwise order.
+    .with_inserted_indices(Indices::U32(vec![
+        // First triangle
+        0, 3, 1, // Second triangle
+        1, 3, 2,
+    ]))
+}
+
+fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
+    // TODO: We need to take the curve and compute the tangent
+    // -> Then at each sample point add to vertex to the positive and negative normal at half_width
+    // -> Finally add end caps and tessellate the shape
+    let mut mesh = BevyMesh3d::default();
+    let segments = generate_curve_info(curve);
+
+    let mut prior_edge = None;
+    for [segment, next_segment] in segments.array_windows::<2>() {
+        let transform = Transform::from_rotation_arc(Vec3::NEG_X, segment.normal.normalize())
+            .with_translation(segment.position);
+
+        let next_transform =
+            Transform::from_rotation_arc(Vec3::NEG_X, next_segment.normal.normalize())
+                .with_translation(next_segment.position);
+
+        let points: Vec<_> = math_helpers::sample_circle(22, transform.compute_affine(), 2.)
+            .into_iter()
+            .rev()
+            .collect();
+
+        prior_edge = if let Some(prior_edge) = prior_edge {
+            let twin = mesh.loft_tri_closed(prior_edge, points);
+            Some(twin)
+        } else {
+            // insert current edge
+            let edge = mesh.insert_loop(points);
+            // close first edge
+            mesh.close_hole_default(mesh.edge(edge).twin_id());
+
+            Some(edge)
+        };
+    }
+
+    mesh.to_bevy_ex(
+        RenderAssetUsages::all(),
+        procedural_modelling::tesselate::TriangulationAlgorithm::Delaunay,
+        true,
+    )
 }
 
 #[test]

@@ -6,6 +6,8 @@
   cmake,
   vulkan-loader,
   stdenv,
+  cargo-watch,
+  mold,
   pkgs ? import {},
 }: let
   libPath = with pkgs;
@@ -26,6 +28,8 @@ in
       cmake
       vulkan-loader
       wayland
+      cargo-watch
+      mold
     ];
     LD_LIBRARY_PATH = libPath;
     dontConfigure = true;
