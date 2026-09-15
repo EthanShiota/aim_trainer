@@ -14,7 +14,7 @@ const TAU: f32 = 6.28318530718;
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    var final_color = vec4(1.,0.1 * in.position.z,1.,1.);
+    var final_color = vec4(in.world_normal.xy,0.,0.);
     return final_color;
 }
 

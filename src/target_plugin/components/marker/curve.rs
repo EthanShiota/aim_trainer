@@ -2,6 +2,7 @@
 use bevy::color::palettes::css::{RED, TURQUOISE};
 use bevy::color::palettes::tailwind::{RED_900, VIOLET_400};
 use bevy::gltf::{self, GltfMesh, GltfPrimitive};
+use bevy::math::{Affine3A, DAffine3, DQuat, DVec3};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::render::render_resource::AsBindGroup;
@@ -31,6 +32,7 @@ use bevy::{
 };
 use bevy_inspector_egui::egui::epaint::color;
 
+use crate::target_plugin::components::marker::curve::math_helpers::{circle, sample_circle};
 use crate::{
     AppState, GameState,
     scoreing::Lifetime,
@@ -50,7 +52,6 @@ impl Plugin for CurvePlugin {
             (curve_marker_gizmos.run_if(resource_equals(DebugMode(true))),),
         )
         .add_plugins(MaterialPlugin::<CurveMarkerMaterial>::default())
-        // .add_plugins(WireframePlugin::default())
         .insert_gizmo_config(
             CurveGizmo,
             GizmoConfig {
@@ -99,7 +100,7 @@ fn curve_marker_gizmos(
         };
 
         let curve_info = generate_curve_info(&curve.curve);
-        for (idx, segment) in curve_info.iter().step_by(10).enumerate() {
+        for (idx, segment) in curve_info.iter().enumerate() {
             gizmos.arrow(
                 segment.position,
                 segment.position + segment.normal.normalize() * 2.,
@@ -113,7 +114,7 @@ fn curve_marker_gizmos(
                 2.,
             );
             for sample in samples {
-                gizmos.line(*sample.pos(), segment.position, VIOLET_400);
+                gizmos.line(sample.position, segment.position, VIOLET_400);
             }
         }
 
@@ -153,7 +154,7 @@ fn on_spawn_hint(
         .unwrap(),
         |f| f,
     );
-    let mesh = create_curve_hint(mesh_curve);
+    let mesh = create_curve_mesh(mesh_curve);
     debug!("spawn hint");
     commands.spawn_scene(bsn! {
                 Name("Curve Path")
@@ -280,24 +281,74 @@ mod math_helpers {
     use std::f32::consts::TAU;
 
     use bevy::{math::Affine3A, prelude::*};
-    use procedural_modelling::{extensions::bevy::*, math::HasPosition};
 
-    pub fn vp(vec: Vec3) -> BevyVertexPayload3d {
-        BevyVertexPayload3d::from_pos(vec)
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct Vertex {
+        pub position: Vec3,
+        pub normal: Vec3,
     }
-    pub fn yz_circle(i: f32, r: f32) -> Vec3 {
-        vec3(0., f32::sin(i) * r, f32::cos(i) * r)
+    pub fn yz_circle(i: f32, r: f32) -> Vertex {
+        let pos = vec3(0., f32::sin(i) * r, f32::cos(i) * r);
+        Vertex {
+            position: pos,
+            // Normal is position because we are at the origin
+            normal: pos,
+        }
     }
 
-    pub fn circle(i: f32, t: Affine3A, r: f32) -> Vec3 {
-        t.transform_point(yz_circle(i * TAU, r))
+    pub fn circle(i: f32, t: Affine3A, r: f32) -> Vertex {
+        let circ = yz_circle(i * TAU, r);
+        Vertex {
+            position: t.transform_point3(circ.position),
+            normal: t.transform_vector3(circ.normal),
+        }
     }
 
-    pub fn sample_circle(n: usize, t: Affine3A, r: f32) -> Vec<BevyVertexPayload3d> {
+    pub fn sample_circle(n: usize, t: Affine3A, r: f32) -> Vec<Vertex> {
         (0..n)
             .map(|i| circle(i as f32 / n as f32, t, r))
-            .map(vp)
             .collect::<Vec<_>>()
+    }
+
+    mod test {
+        use super::*;
+        use std::f32::consts::*;
+
+        fn is_close(a: Vec3, b: Vec3, tol: f32) -> bool {
+            dbg!((dbg!(a) - dbg!(b)).abs().length() < tol)
+        }
+
+        #[test]
+        fn circle_test() {
+            assert!(is_close(yz_circle(0., 1.).position, vec3(0., 0., 1.), 0.01));
+            assert!(is_close(
+                yz_circle(PI, 1.).position,
+                vec3(0., 0., -1.),
+                0.01
+            ));
+
+            assert!(is_close(
+                yz_circle(FRAC_PI_2, 1.).position,
+                vec3(0., f32::sin(FRAC_PI_2), f32::cos(FRAC_PI_2)),
+                0.06
+            ));
+        }
+
+        #[test]
+        fn circle_transformed() {
+            let transform = Affine3A::from_quat(Quat::from_rotation_arc(Vec3::X, Vec3::Z));
+            assert!(is_close(
+                circle(0., transform, 1.).position,
+                vec3(-1., 0., 0.),
+                0.01
+            ));
+
+            assert!(is_close(
+                circle(0., transform, 1.).normal,
+                vec3(-1., 0., 0.),
+                0.01
+            ));
+        }
     }
 }
 
@@ -309,89 +360,128 @@ macro_rules! debug_mesh {
 }
 
 fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
+    let resolution = 32;
+    let radius = 1.;
+
     let segments = generate_curve_info(curve);
+
+    let vertex_count = resolution * segments.len();
+    let segment_count = segments.len();
+    // 0..resolution are ring 0
+
+    // Should be fine
+    let caps = [
+        segments.first().expect("Curve has zero segments"),
+        segments.last().expect("Curve has zero segments"),
+    ];
+    let cap_vertices = [
+        math_helpers::Vertex {
+            position: caps[0].position,
+            normal: -caps[0].normal.normalize(),
+        },
+        math_helpers::Vertex {
+            position: caps[1].position,
+            normal: caps[1].normal.normalize(),
+        },
+    ];
+
+    let vertices = segments
+        .into_iter()
+        .flat_map(|segment: Segment| {
+            // Transform to apply to ring at the segment
+            let transform = Affine3A::from_quat(
+                DQuat::from_rotation_arc(DVec3::NEG_X, segment.normal.normalize().as_dvec3())
+                    .as_quat(),
+            );
+            let mut circ = sample_circle(resolution, transform, radius);
+            circ.iter_mut().for_each(|v| v.position += segment.position);
+            circ
+        })
+        .chain(cap_vertices)
+        .collect::<Vec<_>>();
+
+    let diffs: Vec<_> = vertices
+        .array_windows::<2>()
+        .map(|[a, b]| a.normal.angle_between(b.normal))
+        .collect();
+
+    // Two vertices for end caps
+    assert!(vertices.len() - 2 == vertex_count);
+
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
-    // Add 4 vertices, each with its own position attribute (coordinate in
-    // 3D space), for each of the corners of the parallelogram.
     .with_inserted_attribute(
         Mesh::ATTRIBUTE_POSITION,
-        vec![
-            [0.0, 0.0, 0.0],
-            [1.0, 2.0, 0.0],
-            [2.0, 2.0, 0.0],
-            [1.0, 0.0, 0.0],
-        ],
+        vertices
+            .iter()
+            .map(|v| v.position.to_array())
+            .collect::<Vec<_>>(),
     )
     // Assign a UV coordinate to each vertex.
     .with_inserted_attribute(
         Mesh::ATTRIBUTE_UV_0,
-        vec![[0.0, 1.0], [0.5, 0.0], [1.0, 0.0], [0.5, 1.0]],
+        (0..vertex_count)
+            .into_iter()
+            .map(|i| {
+                [
+                    ((i % resolution) as f32 / resolution as f32),
+                    (segment_count as f32 - (i / resolution) as f32) / segment_count as f32,
+                ]
+            })
+            .chain(
+                // bottom, top
+                [[0.0, 1.], [0.0, 0.0]],
+            )
+            .collect::<Vec<_>>(),
     )
     // Assign normals (everything points outwards)
     .with_inserted_attribute(
         Mesh::ATTRIBUTE_NORMAL,
-        vec![
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-        ],
+        vertices.into_iter().map(|v| v.normal).collect::<Vec<_>>(),
     )
     // After defining all the vertices and their attributes, build each triangle using the
     // indices of the vertices that make it up in a counter-clockwise order.
-    .with_inserted_indices(Indices::U32(vec![
-        // First triangle
-        0, 3, 1, // Second triangle
-        1, 3, 2,
-    ]))
-}
+    .with_inserted_indices(Indices::U32(
+        // Iterate all but last row
+        // each vertex gets 2 faces
+        (0..vertex_count - resolution)
+            .flat_map(|i| {
+                // INFO: Wrap shape with faces
+                let ring_base = (i / resolution) * resolution;
+                let next_ring_base = ring_base + resolution;
+                let local_index = |i| i % resolution;
 
-fn create_curve_hint(curve: impl Curve<Vec3> + Clone) -> Mesh {
-    // TODO: We need to take the curve and compute the tangent
-    // -> Then at each sample point add to vertex to the positive and negative normal at half_width
-    // -> Finally add end caps and tessellate the shape
-    let mut mesh = BevyMesh3d::default();
-    let segments = generate_curve_info(curve);
+                [
+                    ring_base + local_index(i),
+                    ring_base + local_index(i + 1),
+                    next_ring_base + local_index(i),
+                    next_ring_base + local_index(i),
+                    ring_base + local_index(i + 1),
+                    next_ring_base + local_index(i + 1),
+                ]
+            })
+            .chain(
+                // Bottom and top caps
+                (0..=1).flat_map(|b| {
+                    // 0 -> bottom
+                    // 1 -> top
+                    let base = b * (vertex_count - resolution);
+                    let cap_vertex_index = vertex_count + b;
 
-    let mut prior_edge = None;
-    for [segment, next_segment] in segments.array_windows::<2>() {
-        let transform = Transform::from_rotation_arc(Vec3::NEG_X, segment.normal.normalize())
-            .with_translation(segment.position);
-
-        let next_transform =
-            Transform::from_rotation_arc(Vec3::NEG_X, next_segment.normal.normalize())
-                .with_translation(next_segment.position);
-
-        let points: Vec<_> = math_helpers::sample_circle(22, transform.compute_affine(), 2.)
-            .into_iter()
-            .rev()
-            .collect();
-
-        prior_edge = if let Some(prior_edge) = prior_edge {
-            let twin = mesh.loft_tri_closed(prior_edge, points);
-            Some(twin)
-        } else {
-            // insert current edge
-            let edge = mesh.insert_loop(points);
-            // close first edge
-            mesh.close_hole_default(mesh.edge(edge).twin_id());
-
-            Some(edge)
-        };
-    }
-
-    mesh.to_bevy_ex(
-        RenderAssetUsages::all(),
-        procedural_modelling::tesselate::TriangulationAlgorithm::Delaunay,
-        true,
-    )
-}
-
-#[test]
-fn curve_mesh() {
-    let linear_curve = FunctionCurve::new(Interval::UNIT, |t| vec3(t, t, 0.));
-    create_curve_hint(linear_curve);
+                    // walk edge and make triangles which connect to the cap vertex
+                    (0..resolution).flat_map(move |i| {
+                        let local_index = |i| i % resolution;
+                        [
+                            base + local_index(i + (1 - b)),
+                            base + local_index(i + b),
+                            cap_vertex_index,
+                        ]
+                    })
+                }),
+            )
+            .map(|val| val as u32)
+            .collect::<Vec<u32>>(),
+    ))
 }
