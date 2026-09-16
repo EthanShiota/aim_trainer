@@ -7,6 +7,7 @@ use std::{
 
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
+    color::palettes::css,
     prelude::*,
     render::render_resource::BlendState,
     settings::SaveSettings,
@@ -19,7 +20,7 @@ use bevy_egui::{
 use rfd::FileDialog;
 use zip::{ZipArchive, result::ZipError};
 
-use crate::{AppState, GameSettings, scenarios};
+use crate::{AppState, GameSettings, GameState, scenarios};
 use parser::BeatMapOsu;
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
@@ -29,6 +30,43 @@ impl Plugin for MenuPlugin {
             (main_menu, settings_window).run_if(in_state(AppState::Menu)),
         )
         .add_systems(Startup, setup);
+    }
+}
+
+pub fn pause_menu() -> impl Scene {
+    bsn! {
+        Node {
+            display: Display::Flex, justify_content: JustifyContent::Center, align_items: AlignItems::Center, width: percent(100.), height: percent(100.)
+        }
+        DespawnOnExit::<GameState>(GameState::Paused)
+        Children [
+            Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween, border: px(4.)}
+            BorderColor::all(css::BLACK)
+            Children [
+                (
+                    Node {width: percent(100.), height: percent(50.), align_items: AlignItems::Center, justify_content: JustifyContent::Center, justify_items: JustifyItems::Center}
+                    BackgroundColor(css::BLACK)
+                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
+                        commands.set_state(GameState::Playing);
+                    })
+                    Children [
+                        Node {justify_content: JustifyContent::Center}
+                        Text::new("Exit")
+                    ]
+                ),
+                (
+                    Node {width: percent(100.), height: percent(50.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
+                    BackgroundColor(css::BLACK)
+                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
+                        commands.set_state(AppState::Menu);
+                    })
+                    Children [
+                        Node {justify_content: JustifyContent::Center}
+                        Text::new("Main Menu")
+                    ]
+                )
+            ]
+        ]
     }
 }
 

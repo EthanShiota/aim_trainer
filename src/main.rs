@@ -384,32 +384,7 @@ pub mod transition {
         **grab_mode = false;
         cursor_options.grab_mode = CursorGrabMode::None;
         cursor_options.visible = true;
-        commands.spawn_scene(bsn! {
-            Node {
-                display: Display::Flex, justify_content: JustifyContent::Center, align_items: AlignItems::Center, width: percent(100.), height: percent(100.)
-            }
-            DespawnOnExit::<GameState>(GameState::Paused)
-                Children [
-                Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
-            BorderColor::all(css::BLACK)
-                Children [
-                (
-                    Node {width: percent(100.), align_items: AlignItems::Center}
-                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
-                        commands.set_state(GameState::Playing);
-                    })
-                    Text::new("Exit")
-                ),
-                (
-                    Node {width: percent(100.), align_items: AlignItems::Center}
-                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
-                        commands.set_state(AppState::Menu);
-                    })
-                    Text::new("Main Menu")
-                )
-                ]
-                ]
-        });
+        commands.spawn_scene(menus::pause_menu());
     }
 }
 
@@ -423,6 +398,7 @@ fn setup_ui(
         Mesh2d(meshes.add(Circle::new(3.))),
         MeshMaterial2d(meterials.add(Color::WHITE)),
         Transform::default(),
+        DespawnOnExit(AppState::InGame),
     ));
 
     Ok(())
@@ -469,6 +445,7 @@ fn light_and_cameras(
         },
         Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
         VolumetricLight,
+        DespawnOnExit(AppState::InGame),
     ));
 
     commands.spawn_scene(bsn! {
@@ -477,6 +454,7 @@ fn light_and_cameras(
         MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
             color: RED_100.into()
         }))
+        DespawnOnExit::<AppState>(AppState::InGame)
     });
 
     commands.spawn((

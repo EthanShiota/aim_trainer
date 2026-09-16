@@ -1,16 +1,16 @@
 use std::{collections::HashMap, error::Error, path::PathBuf};
 
 use nom::{
-    IResult, Parser,
+    IResult, Input, Parser,
     bytes::{
         complete::{is_not, tag},
-        take_till,
+        take_until,
     },
     character::{
         char,
         complete::{alphanumeric1, line_ending, multispace0, multispace1, not_line_ending, one_of},
     },
-    combinator::{map, opt, recognize},
+    combinator::{eof, map, opt, recognize, rest},
     error::context,
     multi::{many0, many1, separated_list1},
     number::complete::recognize_float,
@@ -228,6 +228,7 @@ enum OsuHeader {
     HitObjects,
 }
 
+#[derive(Debug)]
 enum OsuValue<'a> {
     KV(HashMap<&'a str, &'a str>),
     LIST(Vec<Vec<&'a str>>),
@@ -285,9 +286,9 @@ fn parser<'a>(
         )
         .parse(input)
     };
-    let body = take_till(|c| c == '[');
+    let body = take_until("\n[").or(rest);
 
-    let section = pair(section_header, body).map(|(header, body)| {
+    let section = pair(section_header, terminated(body, multispace0)).map(|(header, body)| {
         let values = match header {
             OsuHeader::General
             | OsuHeader::Editor
@@ -315,9 +316,11 @@ impl BeatMapOsu {
     pub fn new(value: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let s = std::fs::read_to_string(value.clone())?;
 
-        let (_, parse_res) = parser(&s).map_err(|e| e.to_owned())?;
+        let (extra, parse_res) = parser(&s).map_err(|e| e.to_owned())?;
         let (_metadata, sections) = parse_res;
         let sections: HashMap<OsuHeader, OsuValue> = sections.into_iter().collect();
+        log::debug!("extra {:#?}", extra);
+        log::debug!("sections {:#?}", sections);
         let OsuValue::KV(general) = sections.get(&OsuHeader::General).unwrap() else {
             unreachable!()
         };
@@ -374,12 +377,10 @@ impl BeatMapOsu {
 
 #[test]
 fn parser_test() {
-    dbg!(&std::env::current_dir().unwrap());
-    BeatMapOsu::new("test/Kuba Oms - My Love (W h i t e) [Insane].osu".into()).unwrap();
-    BeatMapOsu::new(
-        "test/Windbell - Flow of Life (TSAR  Tu Zi ST Remix) (vivicat) [Extra].osu".into(),
-    )
-    .unwrap();
+    env_logger::init();
+    for file in std::fs::read_dir("test").unwrap().flatten() {
+        BeatMapOsu::new(file.path()).unwrap();
+    }
 }
 
 #[test]
@@ -424,6 +425,5 @@ fn hit_object_test() {
         }) {
             println!("{:?}", slider.object_params.as_ref().unwrap().curve_points);
         }
-        panic!()
     }
 }

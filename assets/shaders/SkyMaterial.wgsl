@@ -292,6 +292,6 @@ fn cnoise4(P: vec4f) -> f32 {
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
-    return vec4<f32>(0.2, 0.2, 0.2, 1.);
+    return vec4<f32>(1. - step(in.uv.y, 0.5), 0.2, 0.2, 0.);
 }
 
