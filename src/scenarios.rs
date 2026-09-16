@@ -22,6 +22,7 @@ use std::{
 
 use crate::{
     AudioBuffer, EditMode, SceneTimer,
+    scoreing::Score,
     target_plugin::{self, BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
 };
 use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
@@ -248,6 +249,10 @@ pub fn osu(
     debug!("leadin: {:?}", leadin);
     let resource = beat_map.spawn(commands.reborrow());
     commands.insert_resource(resource);
+    commands.insert_resource(Score {
+        points: 0,
+        overall_difficulty: osu_beat_map.difficulty.overall_difficulty,
+    });
 }
 
 fn create_curve_marker(

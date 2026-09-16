@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::AppState;
-use crate::scoreing::Score;
+use crate::scoreing::{Lifetime, Score};
 use crate::target_plugin::events::TargetHit;
 use crate::target_plugin::messages::*;
 use crate::{fps_camera::Hovered, target_plugin::events::TargetDestroyed};
@@ -57,14 +57,17 @@ pub fn on_target_hit(
     mut commands: Commands,
     mut q_target: Query<(Entity, &mut Target)>,
     mut score: ResMut<Score>,
-    time: Res<Time<Virtual>>,
+    q_lifetime: Query<&Lifetime>,
 ) {
     if let Ok((ent, mut target)) = q_target.get_mut(e.event_target()) {
         // Update State
         let should_destroy = match target.as_mut() {
             Target::Counter(count) => {
                 *count -= 1;
-                score.points += 1;
+                if let Ok(lifetime) = q_lifetime.get(e.event_target()) {
+                    let points = lifetime.judge_hit(score.overall_difficulty);
+                    score.points += points;
+                }
                 *count == 0
             }
             Target::Duration(duration) => {
