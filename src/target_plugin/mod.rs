@@ -122,7 +122,7 @@ fn add_effect(
     hovered: Query<(Entity, &Marker, &MeshMaterial3d<TargetMaterial>), With<Hovered>>,
     mouse: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    game_settings: Res<GameSettings>,
+    game_settings: If<Res<GameSettings>>,
     mut commands: Commands,
 ) {
     let fire_button = game_settings.keybinds.get(&GameAction::FireWeapon).unwrap();
@@ -148,7 +148,7 @@ fn sync_effect(
     mut target_material: ResMut<Assets<TargetMaterial>>,
     mouse: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    game_settings: Res<GameSettings>,
+    game_settings: If<Res<GameSettings>>,
     mut commands: Commands,
 ) {
     let active_materials: std::collections::HashMap<AssetId<TargetMaterial>, Entity> =

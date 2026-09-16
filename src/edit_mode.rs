@@ -2,7 +2,7 @@ use bevy::{color::palettes::css::WHITE, prelude::*};
 use bevy_egui::prelude::*;
 
 use crate::{
-    AudioBuffer, EditMode, PlayerCamera, SceneTimer,
+    AudioBuffer, EditMode, PlayerCamera,
     target_plugin::{BeatMap, Target, TargetMarker},
 };
 

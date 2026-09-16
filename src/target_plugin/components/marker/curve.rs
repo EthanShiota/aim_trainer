@@ -7,19 +7,6 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::render::render_resource::AsBindGroup;
 use bevy_egui::egui::color_picker::show_color;
-use procedural_modelling::extensions::bevy::show_faces;
-use procedural_modelling::extensions::bevy::text::Text3dGizmo;
-use procedural_modelling::mesh::{
-    EmptyEdgePayload, EmptyFacePayload, FaceBasics, HalfEdge, HalfEdgeMesh, MeshBasics,
-    MeshHalfEdgeBuilder,
-};
-use procedural_modelling::{
-    extensions::bevy::{BevyMesh3d, BevyMeshType3d32, BevyVertexPayload3d},
-    halfedge::*,
-    math::*,
-    mesh::MeshBuilder,
-    operations::*,
-};
 
 use std::{f32, ops::Range, time::Duration};
 
@@ -109,9 +96,12 @@ fn curve_marker_gizmos(
             );
             let samples: Vec<_> = math_helpers::sample_circle(
                 10,
-                Transform::from_rotation_arc(Vec3::NEG_X, segment.normal.normalize())
-                    .with_translation(segment.position)
-                    .compute_affine(),
+                Transform::from_rotation(Quat::from_rotation_arc(
+                    Vec3::NEG_X,
+                    segment.normal.normalize(),
+                ))
+                .with_translation(segment.position)
+                .compute_affine(),
                 2.,
             );
             for sample in samples {
@@ -236,12 +226,8 @@ struct Segment {
     v: Vec3,
 }
 
+/// Takes curve and generates a position and derivative at some number of sample points
 fn generate_curve_info(curve: impl Curve<Vec3> + Clone) -> Vec<Segment> {
-    // TODO: We need to take the curve and compute the tangent
-    // -> Then at each sample point add to vertex to the positive and negative normal at half_width
-    // -> Finally add end caps and tessellate the shape
-    let half_width: f32 = 2.;
-
     let start = curve.domain().start();
     let domain = curve.domain();
 

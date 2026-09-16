@@ -11,9 +11,8 @@ mod target_plugin;
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
 use bevy::platform::collections::HashMap;
-use bevy::reflect::tuple::Tuple;
 use bevy::render::render_resource::AsBindGroup;
-use bevy::time::Stopwatch;
+use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::buffer::SamplesBuffer;
@@ -37,7 +36,9 @@ use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
 use crate::target_plugin::{Active, BeatMap, DebugMode, Marker, Target, TargetResource};
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, SettingsGroup, Reflect)]
+#[reflect(Resource, SettingsGroup, Default)]
+#[settings_group(group = "general")]
 pub struct GameSettings {
     pub volume: f32,
     pub mouse_sensitivity: f32,
@@ -46,7 +47,7 @@ pub struct GameSettings {
     pub mousebinds: HashMap<GameAction, Vec<MouseButton>>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone)]
+#[derive(Hash, Eq, PartialEq, Clone, Reflect)]
 pub enum GameAction {
     FireWeapon,
 }
@@ -67,15 +68,11 @@ impl Default for GameSettings {
     }
 }
 
-#[derive(Resource, PartialEq, Debug, Default, DerefMut, Deref)]
-pub struct SceneTimer(Stopwatch);
-
 #[derive(Resource, Deref)]
 pub struct BeatMapPath(PathBuf);
 
 fn main() {
     App::new()
-        .insert_resource(SceneTimer::default())
         .insert_resource(GrabMouse(true))
         .insert_resource(PickingSettings {
             is_enabled: true,
@@ -88,7 +85,6 @@ fn main() {
             enabled: false,
             ..default()
         })
-        .insert_resource(GameSettings::default())
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
@@ -115,6 +111,8 @@ fn main() {
             scoreing::ScoringPlugin,
             WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
         ))
+        .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
+        .init_resource::<GameSettings>()
         .add_plugins(MaterialPlugin::<SkyMaterial>::default())
         // INFO: State
         .insert_state(AppState::Menu)
@@ -549,6 +547,7 @@ fn sync_game_settings(
     settings: Res<GameSettings>,
     mut fps_config: ResMut<crate::fps_camera::FPSCameraConfig>,
     mut q_sink: Query<&mut AudioSink, With<AudioPlayer<AudioBuffer>>>,
+    mut commands: Commands,
 ) {
     let new_sens =
         crate::fps_camera::FPSCameraConfig::with_sens(settings.mouse_sensitivity, settings.dpi);
@@ -557,6 +556,7 @@ fn sync_game_settings(
     for mut sink in q_sink.iter_mut() {
         sink.set_volume(bevy::audio::Volume::Linear(settings.volume));
     }
+    commands.queue(SaveSettingsSync::Always);
 }
 
 fn on_sound_event(

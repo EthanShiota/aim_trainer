@@ -21,7 +21,7 @@ use std::{
 };
 
 use crate::{
-    AudioBuffer, EditMode, SceneTimer,
+    AudioBuffer, EditMode,
     scoreing::Score,
     target_plugin::{self, BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
 };

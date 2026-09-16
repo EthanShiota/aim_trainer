@@ -9,6 +9,7 @@ use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
     prelude::*,
     render::render_resource::BlendState,
+    settings::SaveSettings,
     tasks::{Task, futures::check_ready},
 };
 use bevy_egui::{
@@ -31,14 +32,33 @@ impl Plugin for MenuPlugin {
     }
 }
 
-fn settings_window(mut contexts: EguiContexts, mut settings: ResMut<GameSettings>) -> Result {
+fn settings_window(
+    mut contexts: EguiContexts,
+    mut settings: If<ResMut<GameSettings>>,
+    mut confirm: Local<bool>,
+    mut commands: Commands,
+) -> Result {
     egui::Window::new("Settings").show(contexts.ctx_mut()?, |ui| {
-        ui.add(egui::Slider::new(&mut settings.volume, 0.0..=1.0).text("Volume"));
-        ui.add(
-            egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0)
-                .text("Mouse Sensitivity"),
-        );
-        ui.add(egui::Slider::new(&mut settings.dpi, 400..=3200).text("DPI"));
+        if *confirm {
+            if ui.button("confirm").clicked() {
+                *settings.as_mut() = GameSettings::default();
+                commands.queue(SaveSettings::IfChanged);
+                *confirm = false;
+            }
+            if ui.button("cancel").clicked() {
+                *confirm = false;
+            }
+        } else {
+            ui.add(egui::Slider::new(&mut settings.volume, 0.0..=1.0).text("Volume"));
+            ui.add(
+                egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0)
+                    .text("Mouse Sensitivity"),
+            );
+            ui.add(egui::Slider::new(&mut settings.dpi, 400..=3200).text("DPI"));
+            if ui.button("reset").clicked() {
+                *confirm = true;
+            }
+        }
     });
     Ok(())
 }
