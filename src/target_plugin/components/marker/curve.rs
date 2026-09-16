@@ -32,6 +32,7 @@ use bevy::{
 };
 use bevy_inspector_egui::egui::epaint::color;
 
+use crate::target_plugin::components::beat_map::BeatMapResource;
 use crate::target_plugin::components::marker::curve::math_helpers::{circle, sample_circle};
 use crate::{
     AppState, GameState,
@@ -136,13 +137,14 @@ fn on_spawn_hint(
     mut target_resource: Res<TargetResource>,
     asset_server: ResMut<AssetServer>,
     time: Res<Time<Virtual>>,
+    beat_map: If<Res<BeatMapResource>>,
 ) {
     let marker = q_marker.get(e.event_target()).unwrap();
     let Ok((entity, curve_marker)) = q_curve_marker.get(e.event_target()) else {
         return;
     };
 
-    let preempt = marker.spawn_time.remaining();
+    let preempt = marker.spawn_time - marker.preempt;
     // show curve
 
     // TODO: new line material

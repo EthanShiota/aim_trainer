@@ -1,10 +1,14 @@
 use std::{fmt::Debug, time::Duration};
 
 use bevy::prelude::*;
+use tracing::instrument;
 
 use crate::{
-    AppState,
-    target_plugin::events::{SpawnHint, SpawnTarget},
+    AppState, AudioBuffer,
+    target_plugin::{
+        components::beat_map::BeatMapResource,
+        events::{SpawnHint, SpawnTarget},
+    },
 };
 
 mod curve;
@@ -24,9 +28,9 @@ impl Plugin for MarkerPlugin {
 #[derive(Component, Clone, Default)]
 pub struct Marker {
     // Location in song where marker should be clicked
-    spawn_time: Timer,
+    spawn_time: Duration,
     // Offset where hint should be displayed
-    preempt: Timer,
+    preempt: Duration,
 }
 
 impl Marker {
@@ -34,24 +38,24 @@ impl Marker {
         let Some(preempt_timer) = spawn_time.checked_sub(preempt) else {
             warn!("Preempt begins before start of map!");
             return Self {
-                spawn_time: Timer::new(spawn_time, TimerMode::Once),
-                preempt: Timer::new(Duration::ZERO, TimerMode::Once),
+                spawn_time: spawn_time,
+                preempt: Duration::ZERO,
             };
         };
 
         Self {
-            spawn_time: Timer::new(spawn_time, TimerMode::Once),
-            preempt: Timer::new(preempt_timer, TimerMode::Once),
+            spawn_time: spawn_time,
+            preempt: preempt_timer,
         }
     }
     pub fn time(&self) -> Duration {
-        self.spawn_time.duration()
+        self.spawn_time
     }
 }
 
 impl Ord for Marker {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.spawn_time.duration().cmp(&other.spawn_time.duration())
+        self.spawn_time.cmp(&other.spawn_time)
     }
 }
 
@@ -63,7 +67,7 @@ impl PartialOrd for Marker {
 
 impl PartialEq for Marker {
     fn eq(&self, other: &Self) -> bool {
-        self.spawn_time.duration().eq(&other.spawn_time.duration())
+        self.spawn_time.eq(&other.spawn_time)
     }
 }
 
@@ -71,24 +75,26 @@ impl Eq for Marker {}
 
 impl Debug for Marker {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Marker: {:?}", self.spawn_time.duration())
+        write!(f, "Marker: {:?}", self.spawn_time)
     }
 }
 
 pub fn tick(
-    time: Res<Time<Virtual>>,
     mut q_marker: Query<(Entity, &mut Marker)>,
+    q_sink: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
+    mut beat_map: If<ResMut<BeatMapResource>>,
     mut commands: Commands,
 ) {
-    let delta = time.delta();
-    for (entity, mut marker) in q_marker.iter_mut() {
-        marker.spawn_time.tick(delta);
-        marker.preempt.tick(delta);
-        if marker.preempt.just_finished() {
+    let Ok(sink) = q_sink.get(beat_map.music_player) else {
+        return;
+    };
+    for (entity, marker) in q_marker.iter_mut() {
+        if (beat_map.scene_timer..=sink.position()).contains(&marker.preempt) {
             commands.entity(entity).trigger(SpawnHint);
         }
-        if marker.spawn_time.just_finished() {
+        if (beat_map.scene_timer..=sink.position()).contains(&marker.spawn_time) {
             commands.entity(entity).trigger(SpawnTarget);
         }
     }
+    beat_map.scene_timer = sink.position();
 }

@@ -42,9 +42,7 @@ impl Plugin for EditPlugin {
 fn edit_mode_ui(
     mut contexts: EguiContexts,
     _q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
-    mut beat_map: ResMut<BeatMap>,
     mut commands: Commands,
-    targets: Query<(&TargetMarker, &Transform)>,
     spawned_targets: Query<(Entity, &Target)>,
 ) -> Result {
     egui::Window::new("edit").show(contexts.ctx_mut()?, |ui| {

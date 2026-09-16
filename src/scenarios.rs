@@ -130,7 +130,7 @@ pub fn osu(
     mut audio: ResMut<Assets<AudioBuffer>>,
     mut meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
-    mut stopwatch: ResMut<SceneTimer>,
+    mut time: ResMut<Time<Virtual>>,
 ) {
     let audio_file_path = get_audio_file_path(&osu_beat_map);
     let audio_file =
@@ -244,9 +244,10 @@ pub fn osu(
         target_curves,
         target_markers,
     };
-    stopwatch.reset();
-    beat_map.spawn(commands.reborrow());
-    commands.insert_resource(beat_map);
+
+    debug!("leadin: {:?}", leadin);
+    let resource = beat_map.spawn(commands.reborrow());
+    commands.insert_resource(resource);
 }
 
 fn create_curve_marker(

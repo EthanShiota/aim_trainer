@@ -318,22 +318,8 @@ fn game_loop(
 
 fn debug_window(
     mut contexts: EguiContexts,
-    beat_map: Option<Res<BeatMap>>,
     target_resource: Option<ResMut<TargetResource>>,
 ) -> Result {
-    egui::Window::new("Beatmap Debug Inspector").show(contexts.ctx_mut()?, |ui| {
-        if let Some(beat_map) = beat_map {
-            let hit_markers = beat_map.target_markers.clone();
-            egui::ScrollArea::new([false, true])
-                .max_height(400.)
-                .show(ui, |ui| {
-                    for (_target_marker, marker, transform) in hit_markers {
-                        ui.label(format!("{:?} at {:?}", marker, transform.translation));
-                    }
-                });
-        }
-    });
-
     if let Some(mut target_resource) = target_resource {
         egui::Window::new("Target Resource").show(contexts.ctx_mut()?, |ui| {
             let TargetResource {

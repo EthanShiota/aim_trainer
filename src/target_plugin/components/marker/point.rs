@@ -38,7 +38,7 @@ pub fn on_spawn_hint(
     let Ok((entity, marker, spawn_location)) = q_target_markers.get(e.event_target()) else {
         return;
     };
-    let preempt = marker.spawn_time.remaining();
+    let preempt = marker.spawn_time - marker.preempt;
     // Start preempt time i.e. fade in or whatever
     trace!("Begin Preempt");
     // spawn target
