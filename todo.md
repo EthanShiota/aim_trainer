@@ -7,8 +7,10 @@
 - [x] Proper map select
 - [x] Return to menu
 - [ ] Scoring
+  - [ ] Slider scoring
+  - [ ] Hit circle scoring
 - [x] Approach Window
-- [ ] Sound effect for sliders
+- [x] Sound effect for sliders
 - [ ] auto play showcase mode
 
 ## Visuals
@@ -21,7 +23,7 @@
 
 - [x] Sensitivity
 - [x] Volume
-- [ ] save settings somewhere
+- [x] save settings somewhere
 
 ## UX
 
