@@ -10,6 +10,8 @@ mod target_plugin;
 
 use bevy::audio::AddAudioSource;
 use bevy::color::palettes::tailwind::*;
+use bevy::platform::collections::HashMap;
+use bevy::reflect::tuple::Tuple;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::time::Stopwatch;
 use bevy_egui::egui::Widget;
@@ -35,11 +37,18 @@ use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
 use crate::target_plugin::{Active, BeatMap, DebugMode, Marker, Target, TargetResource};
 
-#[derive(Resource, Clone, Copy)]
+#[derive(Resource, Clone)]
 pub struct GameSettings {
     pub volume: f32,
     pub mouse_sensitivity: f32,
     pub dpi: usize,
+    pub keybinds: HashMap<GameAction, Vec<KeyCode>>,
+    pub mousebinds: HashMap<GameAction, Vec<MouseButton>>,
+}
+
+#[derive(Hash, Eq, PartialEq, Clone)]
+pub enum GameAction {
+    FireWeapon,
 }
 
 impl Default for GameSettings {
@@ -48,6 +57,12 @@ impl Default for GameSettings {
             volume: 1.0,
             mouse_sensitivity: 16.351,
             dpi: 800,
+            keybinds: [(GameAction::FireWeapon, vec![KeyCode::KeyX, KeyCode::KeyZ])]
+                .into_iter()
+                .collect(),
+            mousebinds: [(GameAction::FireWeapon, vec![MouseButton::Left])]
+                .into_iter()
+                .collect(),
         }
     }
 }
@@ -269,13 +284,22 @@ struct PlayerCamera;
 fn playing(
     mut commands: Commands,
     mouse_input: Res<ButtonInput<MouseButton>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time<Virtual>>,
-    _q_audio: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
-    _stopwatch: ResMut<SceneTimer>,
+    game_settings: Res<GameSettings>,
 ) {
-    if mouse_input.just_pressed(MouseButton::Left) {
+    let fire_button = game_settings.keybinds.get(&GameAction::FireWeapon).unwrap();
+    let fire_button_mouse = game_settings
+        .mousebinds
+        .get(&GameAction::FireWeapon)
+        .unwrap();
+    if mouse_input.any_just_pressed(fire_button_mouse.into_iter().cloned())
+        || keyboard_input.any_just_pressed(fire_button.into_iter().cloned())
+    {
         commands.run_system_cached(fire_weapon);
-    } else if mouse_input.pressed(MouseButton::Left) {
+    } else if mouse_input.any_pressed(fire_button_mouse.into_iter().cloned())
+        || keyboard_input.any_pressed(fire_button.into_iter().cloned())
+    {
         commands.run_system_cached_with(fire_weapon_held, time.delta());
     }
 }
