@@ -11,6 +11,7 @@ mod target_plugin;
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::audio::AddAudioSource;
 use bevy::camera::{CameraOutputMode, Exposure};
+use bevy::math::primitives;
 use bevy::pbr::{
     AtmosphereMode, AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections,
 };
@@ -26,7 +27,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::camera::visibility::RenderLayers;
-use bevy::color::palettes::css::{self, BLACK};
+use bevy::color::palettes::css::{self, BLACK, LIGHT_BLUE};
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
 use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricFog, VolumetricLight};
@@ -452,6 +453,16 @@ fn light_and_cameras(
     ));
 
     commands.spawn_scene(bsn! {
+        #ORB
+        Mesh3d(asset_value(primitives::Cylinder::new(100.,1.).mesh()))
+        MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
+        Transform {
+            translation: vec3(0., -80., 0.),
+        }
+        DespawnOnExit::<AppState>(AppState::InGame)
+    });
+
+    commands.spawn_scene(bsn! {
         #Sky
         // Mesh3d(asset_value(Sphere::new(1000.).mesh().ico(7).unwrap().with_inverted_winding().unwrap()))
         // MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
@@ -468,7 +479,7 @@ fn light_and_cameras(
 
     commands.spawn((
         Camera3d::default(),
-        RenderLayers::from_layers(&[0]),
+        RenderLayers::from_layers(&[0, 1]),
         Camera {
             is_active: true,
             ..default()

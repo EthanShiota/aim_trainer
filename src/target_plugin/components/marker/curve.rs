@@ -1,5 +1,5 @@
 #![allow(unused)]
-use bevy::color::palettes::css::{RED, TURQUOISE};
+use bevy::color::palettes::css::{LIGHT_BLUE, RED, TURQUOISE};
 use bevy::color::palettes::tailwind::{RED_900, VIOLET_400};
 use bevy::gltf::{self, GltfMesh, GltfPrimitive};
 use bevy::math::{Affine3A, DAffine3, DQuat, DVec3};
@@ -146,16 +146,19 @@ fn on_spawn_hint(
     );
     let mesh = create_curve_mesh(mesh_curve);
     debug!("spawn hint");
+    // TODO: Make the curve despawn when the animation is done
     commands.spawn_scene(bsn! {
-                Name("Curve Path")
-                Mesh3d(asset_value(mesh))
-                // Transform {
-                //     translation: vec3(0.,0.,-50.)
-                // }
-                DespawnOnExit::<AppState>(AppState::InGame)
-                MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
-                template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
-            });
+        Name("Curve Path")
+        Mesh3d(asset_value(mesh))
+        // Transform {
+        //     translation: vec3(0.,0.,-50.)
+        // }
+        DespawnOnExit::<AppState>(AppState::InGame)
+        // MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
+
+        MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
+        template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
+    });
 
     // INFO: Spawns curve
     let mut clip = AnimationClip::default();
