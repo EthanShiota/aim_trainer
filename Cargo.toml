@@ -12,7 +12,6 @@ bevy = { version = "0.19.1", features = [
   "file_watcher",
   "debug",
   "bevy_mikktspace",
-  "dynamic_linking",
   "bevy_dev_tools",
   "bevy_ui",
   "bevy_settings",

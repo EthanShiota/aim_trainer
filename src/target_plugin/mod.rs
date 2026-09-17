@@ -118,6 +118,7 @@ fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 #[derive(Component)]
 pub struct Active;
 
+// TODO: Unified GameActive::FireWeapon handling so we don't redo work
 fn add_effect(
     hovered: Query<(Entity, &Marker, &MeshMaterial3d<TargetMaterial>), With<Hovered>>,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -143,6 +144,7 @@ fn add_effect(
     }
 }
 
+// TODO: Unified GameActive::FireWeapon handling so we don't redo work
 fn sync_effect(
     active: Query<(&MeshMaterial3d<TargetMaterial>, Entity), (With<Active>, With<Hovered>)>,
     mut target_material: ResMut<Assets<TargetMaterial>>,

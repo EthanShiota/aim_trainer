@@ -286,6 +286,7 @@ struct PlayerCamera;
 //     Ok(())
 // }
 
+// TODO: Unified GameActive::FireWeapon handling so we don't redo work
 fn playing(
     mut commands: Commands,
     mouse_input: Res<ButtonInput<MouseButton>>,
