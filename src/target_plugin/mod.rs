@@ -138,7 +138,7 @@ fn add_effect(
             .sort_by_key::<&Marker, _>(|m| m.time())
             .next()
         {
-            commands.entity(target.0).insert(Active);
+            commands.entity(target.0).try_insert(Active);
         }
     }
 }

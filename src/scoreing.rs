@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use bevy::{color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection};
+use bevy::{
+    app::AnimationSystems, color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection,
+};
 
 use crate::{AppState, target_plugin::Marker};
 pub struct ScoringPlugin;
@@ -19,7 +21,7 @@ impl Plugin for ScoringPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(AppState::InGame), setup)
             .add_systems(Update, (update_score).run_if(in_state(AppState::InGame)))
-            .add_systems(FixedUpdate, tick.run_if(in_state(AppState::InGame)));
+            .add_systems(Update, tick.run_if(in_state(AppState::InGame)));
     }
 }
 
@@ -55,7 +57,7 @@ impl Lifetime {
 
 fn tick(
     mut q_lifetime: Query<(Entity, &mut Lifetime)>,
-    time: Res<Time<Fixed>>,
+    time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
     for (ent, mut lifetime) in q_lifetime.iter_mut() {

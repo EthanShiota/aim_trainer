@@ -46,7 +46,7 @@ pub fn tick(
 
             if fade_in.0.is_finished() {
                 m.ring_width = 2.;
-                commands.entity(entity).remove::<FadeIn>();
+                commands.entity(entity).try_remove::<FadeIn>();
             }
         }
     }
@@ -73,7 +73,8 @@ pub fn on_target_hit(
             Target::Duration(duration) => {
                 // *duration = duration.saturating_sub(time.delta());
                 // score.points += 1;
-                duration.is_zero()
+                // duration.is_zero()
+                false
             }
         };
 

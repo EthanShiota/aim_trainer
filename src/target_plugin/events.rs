@@ -14,4 +14,7 @@ pub struct SpawnHint(pub Entity);
 
 /// Triggered at the start, end, and when changing direction
 #[derive(AnimationEvent, Clone)]
-pub struct CurveSoundEvent(pub Entity);
+pub struct CurveSoundEvent {
+    pub entity: Entity,
+    pub last: bool,
+}

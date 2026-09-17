@@ -297,12 +297,12 @@ fn playing(
         .mousebinds
         .get(&GameAction::FireWeapon)
         .unwrap();
-    if mouse_input.any_just_pressed(fire_button_mouse.into_iter().cloned())
-        || keyboard_input.any_just_pressed(fire_button.into_iter().cloned())
+    if mouse_input.any_just_pressed(fire_button_mouse.into_iter().copied())
+        || keyboard_input.any_just_pressed(fire_button.into_iter().copied())
     {
         commands.run_system_cached(fire_weapon);
-    } else if mouse_input.any_pressed(fire_button_mouse.into_iter().cloned())
-        || keyboard_input.any_pressed(fire_button.into_iter().cloned())
+    } else if mouse_input.any_pressed(fire_button_mouse.into_iter().copied())
+        || keyboard_input.any_pressed(fire_button.into_iter().copied())
     {
         commands.run_system_cached_with(fire_weapon_held, time.delta());
     }
@@ -320,16 +320,8 @@ fn game_loop(
     key_input: Res<ButtonInput<KeyCode>>,
     mut debug_mode: ResMut<target_plugin::DebugMode>,
     game_state: Res<State<GameState>>,
-    q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
 ) {
     let game_state = game_state.get();
-    for (sink, _) in q_sink {
-        if *game_state == GameState::Paused {
-            sink.pause();
-        } else {
-            sink.play();
-        }
-    }
 
     if key_input.just_pressed(KeyCode::Slash) {
         debug_mode.0 = !debug_mode.0;
@@ -370,22 +362,26 @@ fn debug_window(
 pub mod transition {
     use super::*;
 
-    pub fn play(
+    pub(crate) fn play(
         mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
         mut grab_mode: ResMut<GrabMouse>,
         mut time: ResMut<Time<Virtual>>,
+        q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
     ) {
+        q_sink.into_iter().for_each(|sink| sink.0.play());
         time.unpause();
         cursor_options.grab_mode = CursorGrabMode::Locked;
         cursor_options.visible = false;
         **grab_mode = true;
     }
-    pub fn pause(
+    pub(crate) fn pause(
         mut commands: Commands,
         mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
         mut grab_mode: ResMut<GrabMouse>,
         mut time: ResMut<Time<Virtual>>,
+        q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
     ) {
+        q_sink.into_iter().for_each(|sink| sink.0.pause());
         time.pause();
         **grab_mode = false;
         cursor_options.grab_mode = CursorGrabMode::None;
@@ -462,7 +458,7 @@ fn light_and_cameras(
         //     color: RED_100.into()
         // }))
         Atmosphere {
-            medium: asset_value(ScatteringMedium::earth(256, 256)),
+            medium: asset_value(ScatteringMedium::earth(128, 128)),
             inner_radius: 60000.,
             outer_radius: 700000.
         }
@@ -572,14 +568,17 @@ fn sync_game_settings(
 
 fn on_sound_event(
     e: On<CurveSoundEvent>,
-    hovered: Query<(), (With<Active>, With<Hovered>)>,
+    hovered: Query<(), With<Hovered>>,
     mut commands: Commands,
     asset_server: ResMut<AssetServer>,
 ) {
-    if hovered.contains(e.0) {
+    if hovered.contains(e.entity) {
         commands.spawn((
             AudioPlayer::new(asset_server.load("audio/Creams.ogg")),
             PlaybackSettings::REMOVE,
         ));
+    }
+    if e.last {
+        commands.entity(e.entity).despawn();
     }
 }

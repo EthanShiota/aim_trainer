@@ -119,9 +119,8 @@ fn curve_marker_gizmos(
 
 fn on_spawn_hint(
     e: On<SpawnHint>,
-    q_curve_marker: Query<(Entity, &mut CurveMarker)>,
+    q_curve_marker: Query<(Entity, &super::Marker, &mut CurveMarker)>,
     mut commands: Commands,
-    q_marker: Query<&super::Marker>,
     mut animation_clips: ResMut<Assets<AnimationClip>>,
     mut animation_graphs: ResMut<Assets<AnimationGraph>>,
     mut target_resource: Res<TargetResource>,
@@ -129,8 +128,7 @@ fn on_spawn_hint(
     time: Res<Time<Virtual>>,
     beat_map: If<Res<BeatMapResource>>,
 ) {
-    let marker = q_marker.get(e.event_target()).unwrap();
-    let Ok((entity, curve_marker)) = q_curve_marker.get(e.event_target()) else {
+    let Ok((entity, marker, curve_marker)) = q_curve_marker.get(e.event_target()) else {
         return;
     };
 
@@ -173,10 +171,11 @@ fn on_spawn_hint(
     // INFO: add sound events
     let segment_duration = curve_marker.duration / curve_marker.slides as f32;
     for slide in 0..=curve_marker.slides {
+        let last = slide == curve_marker.slides;
         clip.add_event_to_target(
             anim_id,
             segment_duration * slide as f32,
-            CurveSoundEvent(entity),
+            CurveSoundEvent { entity, last },
         );
     }
 
@@ -187,31 +186,39 @@ fn on_spawn_hint(
 
     let anim_duration = Duration::from_secs_f32(curve_marker.duration);
     let end_time = time.elapsed() + preempt + anim_duration;
-    let mut slider = commands.entity(entity)
-                .apply_scene(bsn! {
-                    {target_resource.target_scene()}
-                    Transform {
-                        translation: {curve_marker.curve.sample_unchecked(0.)}
-                    }
-                    FadeIn({Timer::new(preempt, TimerMode::Once)})
-                    template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
-                    template_value(player)
-                    AnimationGraphHandle(asset_value(animation_graph))
-                    template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
-                }).observe(move |e: On<SpawnTarget>, mut q_player: Query<&mut AnimationPlayer>, mut commands: Commands, time: Res<Time<Virtual>>, q_target_material: Query<&mut MeshMaterial3d<TargetMaterial>>, mut target_material: ResMut<Assets<TargetMaterial>>| {
-                    let speedup = anim_duration.div_duration_f32(time.elapsed().abs_diff(end_time));
-                    if let Ok(mut p) = q_player.get_mut(e.event_target()) {
-                        debug!("begin curve: {} animation with speedup: {speedup}", e.event_target());
-                        p.start(animation_node_index).set_speed(speedup);
-                    }
-                    commands.entity(e.event_target()).insert(Target::Duration(time.elapsed().abs_diff(end_time)));
+    let mut slider = commands
+        .entity(entity)
+        .apply_scene(bsn! {
+            {target_resource.target_scene()}
+            Transform {
+                translation: {curve_marker.curve.sample_unchecked(0.)}
+            }
+            FadeIn({Timer::new(preempt, TimerMode::Once)})
+            template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
+            template_value(player)
+            AnimationGraphHandle(asset_value(animation_graph))
+        })
+        .observe(
+            move |e: On<SpawnTarget>,
+                  mut q_player: Query<&mut AnimationPlayer>,
+                  mut commands: Commands,
+                  time: Res<Time<Virtual>>| {
+                if let Ok(mut p) = q_player.get_mut(e.event_target()) {
+                    p.start(animation_node_index);
+                }
+                commands
+                    .entity(e.event_target())
+                    .insert(Target::Duration(time.elapsed().abs_diff(end_time)))
+                    .insert(Lifetime::duration(anim_duration));
 
-                    commands.entity(e.observer()).despawn();
-                }).observe(|e: On<TargetHit>, mut commands:  Commands| {
-                    commands.entity(e.event_target()).trigger(SpawnTarget);
-                    commands.entity(e.observer()).despawn();
-
-                }).id();
+                commands.entity(e.observer()).despawn();
+            },
+        )
+        .observe(|e: On<TargetHit>, mut commands: Commands| {
+            commands.entity(e.event_target()).trigger(SpawnTarget);
+            commands.entity(e.observer()).despawn();
+        })
+        .id();
 
     commands
         .entity(slider)
