@@ -7,6 +7,7 @@ edition = "2024"
 parser = { path = "./crates/parser" }
 bevy = { version = "0.19.1", features = [
   "free_camera",
+  "multi_threaded",
   "mesh_picking",
   "file_watcher",
   "debug",

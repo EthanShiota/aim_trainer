@@ -26,6 +26,7 @@ impl Plugin for MarkerPlugin {
 }
 
 #[derive(Component, Clone, Default)]
+#[component(immutable)]
 pub struct Marker {
     // Location in song where marker should be clicked
     spawn_time: Duration,
@@ -80,7 +81,7 @@ impl Debug for Marker {
 }
 
 pub fn tick(
-    mut q_marker: Query<(Entity, &mut Marker)>,
+    q_marker: Query<(Entity, &Marker)>,
     q_sink: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     mut beat_map: If<ResMut<BeatMapResource>>,
     mut commands: Commands,
@@ -88,7 +89,7 @@ pub fn tick(
     let Ok(sink) = q_sink.get(beat_map.music_player) else {
         return;
     };
-    for (entity, marker) in q_marker.iter_mut() {
+    for (entity, marker) in q_marker.iter() {
         if (beat_map.scene_timer..=sink.position()).contains(&marker.preempt) {
             commands.entity(entity).trigger(SpawnHint);
         }

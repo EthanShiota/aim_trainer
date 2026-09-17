@@ -93,6 +93,7 @@ pub fn on_target_destroyed(
         commands.spawn_scene(bsn! {
             AudioPlayer("audio/Creams.ogg")
             template_value(t)
+            PlaybackSettings::REMOVE
             DespawnOnExit::<AppState>(AppState::InGame)
         });
     }

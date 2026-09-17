@@ -7,6 +7,7 @@ use std::f32::{
 use bevy::{
     app::AnimationSystems,
     input::mouse::AccumulatedMouseMotion,
+    picking::mesh_picking::ray_cast::RayCastVisibility::Visible,
     prelude::*,
     window::{CursorOptions, PrimaryWindow},
 };
@@ -79,7 +80,6 @@ fn update(
     mut q_primary_window: Query<(&mut Window, &mut CursorOptions), With<PrimaryWindow>>,
     mouse_motion: Res<AccumulatedMouseMotion>,
     config: Res<FPSCameraConfig>,
-    time: Res<Time<Real>>,
 ) {
     if !**grab_mouse {
         return;
@@ -110,7 +110,9 @@ fn update_raycast(
 
         // Filter out non target meshes
         let filter = |entity| q_target.contains(entity);
-        let mut settings = MeshRayCastSettings::default().with_filter(&filter);
+        let mut settings = MeshRayCastSettings::default()
+            .with_filter(&filter)
+            .with_visibility(Visible);
 
         let results = ray_cast.cast_ray(ray, &settings);
 
@@ -123,7 +125,7 @@ fn update_raycast(
 }
 
 fn remove_hovered(mut commands: Commands, mut q_hovered: Query<Entity, With<Hovered>>) {
-    for hovered in q_hovered.iter_mut() {
+    for hovered in q_hovered.iter() {
         commands.entity(hovered).remove::<Hovered>();
     }
 }

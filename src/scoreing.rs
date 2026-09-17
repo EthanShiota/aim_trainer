@@ -18,10 +18,8 @@ struct ScoreDisplay;
 impl Plugin for ScoringPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(AppState::InGame), setup)
-            .add_systems(
-                Update,
-                (tick, update_score).run_if(in_state(AppState::InGame)),
-            );
+            .add_systems(Update, (update_score).run_if(in_state(AppState::InGame)))
+            .add_systems(FixedUpdate, tick.run_if(in_state(AppState::InGame)));
     }
 }
 
@@ -57,14 +55,14 @@ impl Lifetime {
 
 fn tick(
     mut q_lifetime: Query<(Entity, &mut Lifetime)>,
-    time: Res<Time<Virtual>>,
+    time: Res<Time<Fixed>>,
     mut commands: Commands,
 ) {
     for (ent, mut lifetime) in q_lifetime.iter_mut() {
         lifetime.0.tick(time.delta());
         if lifetime.0.is_finished() {
             // TODO: Calculate score
-            commands.entity(ent).despawn();
+            commands.entity(ent).try_despawn();
         }
     }
 }

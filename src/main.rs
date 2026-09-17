@@ -8,10 +8,15 @@ mod scenarios;
 mod scoreing;
 mod target_plugin;
 
+use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::audio::AddAudioSource;
-use bevy::color::palettes::tailwind::*;
+use bevy::camera::{CameraOutputMode, Exposure};
+use bevy::pbr::{
+    AtmosphereMode, AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections,
+};
 use bevy::platform::collections::HashMap;
-use bevy::render::render_resource::AsBindGroup;
+use bevy::post_process::bloom::Bloom;
+use bevy::render::render_resource::{AsBindGroup, BlendState};
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -21,10 +26,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::camera::visibility::RenderLayers;
-use bevy::color::palettes::css::{self};
-use bevy::light::VolumetricLight;
+use bevy::color::palettes::css::{self, BLACK};
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
+use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricFog, VolumetricLight};
 use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
 use bevy_skein::SkeinPlugin;
@@ -91,7 +96,7 @@ fn main() {
                     primary_window: Window {
                         title: "Aim Game".to_string(),
                         resizable: true,
-                        present_mode: bevy::window::PresentMode::Immediate,
+                        present_mode: bevy::window::PresentMode::Mailbox,
                         fit_canvas_to_parent: true,
                         prevent_default_event_handling: true,
                         ..default()
@@ -109,6 +114,7 @@ fn main() {
             edit_mode::EditPlugin,
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
+            bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
             WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
@@ -398,6 +404,7 @@ fn setup_ui(
         Mesh2d(meshes.add(Circle::new(3.))),
         MeshMaterial2d(meterials.add(Color::WHITE)),
         Transform::default(),
+        RenderLayers::layer(1),
         DespawnOnExit(AppState::InGame),
     ));
 
@@ -450,20 +457,42 @@ fn light_and_cameras(
 
     commands.spawn_scene(bsn! {
         #Sky
-        Mesh3d(asset_value(Sphere::new(1000.).mesh().ico(7).unwrap().with_inverted_winding().unwrap()))
-        MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
-            color: RED_100.into()
-        }))
+        // Mesh3d(asset_value(Sphere::new(1000.).mesh().ico(7).unwrap().with_inverted_winding().unwrap()))
+        // MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
+        //     color: RED_100.into()
+        // }))
+        Atmosphere {
+            medium: asset_value(ScatteringMedium::earth(256, 256)),
+            inner_radius: 60000.,
+            outer_radius: 700000.
+        }
+        RenderLayers::layer(0)
         DespawnOnExit::<AppState>(AppState::InGame)
     });
 
     commands.spawn((
         Camera3d::default(),
-        RenderLayers::from_layers(&[0, 1]),
+        RenderLayers::from_layers(&[0]),
         Camera {
             is_active: true,
             ..default()
         },
+        (
+            AtmosphereSettings::default(),
+            Exposure::SUNLIGHT,
+            Bloom::ANAMORPHIC,
+            AtmosphereEnvironmentMapLight::default(),
+            VolumetricFog {
+                ambient_intensity: 0.0,
+                ..default()
+            },
+            Msaa::Off,
+            TemporalAntiAliasing::default(),
+            ScreenSpaceReflections {
+                min_perceptual_roughness: 0.0..0.0,
+                ..default()
+            },
+        ),
         Transform::from_xyz(0., 5., 0.),
         PlayerCamera,
         FPSCamera::default(),
@@ -474,10 +503,14 @@ fn light_and_cameras(
         Name::new("UI Camera"),
         DespawnOnExit(AppState::InGame),
         Camera2d,
+        RenderLayers::layer(1),
         Camera {
             order: 1,
-            is_active: true,
-            clear_color: ClearColorConfig::None,
+            output_mode: CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::None,
+            },
+            clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
     ));

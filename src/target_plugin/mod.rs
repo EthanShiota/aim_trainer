@@ -42,7 +42,7 @@ impl Plugin for TargetPlugin {
             .add_plugins(MarkerPlugin)
             .add_plugins(TimingRingPlugin)
             .add_systems(
-                RunFixedMainLoop,
+                Update,
                 add_effect
                     .in_set(TargetSchedule)
                     .before(RunFixedMainLoopSystems::FixedMainLoop),
