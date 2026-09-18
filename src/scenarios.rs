@@ -307,7 +307,7 @@ fn create_curve_marker(
                 todo!()
             }
 
-            let osu_px_points: Vec<Vec2> = points.iter().copied().collect();
+            let osu_px_points: Vec<Vec2> = points.to_vec();
             let center = circle_center(osu_px_points[0], osu_px_points[1], osu_px_points[2]);
             let radius = center.distance(osu_px_points[0]);
 

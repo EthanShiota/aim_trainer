@@ -131,16 +131,14 @@ fn add_effect(
         .mousebinds
         .get(&GameAction::FireWeapon)
         .unwrap();
-    if mouse.any_just_pressed(fire_button_mouse.into_iter().cloned())
-        || keyboard.any_just_pressed(fire_button.into_iter().cloned())
-    {
-        if let Some(target) = hovered
+    if (mouse.any_just_pressed(fire_button_mouse.iter().cloned())
+        || keyboard.any_just_pressed(fire_button.iter().cloned()))
+        && let Some(target) = hovered
             .into_iter()
             .sort_by_key::<&Marker, _>(|m| m.time())
             .next()
-        {
-            commands.entity(target.0).try_insert(Active);
-        }
+    {
+        commands.entity(target.0).try_insert(Active);
     }
 }
 
@@ -161,16 +159,16 @@ fn sync_effect(
         .mousebinds
         .get(&GameAction::FireWeapon)
         .unwrap();
-    let pressed = mouse.any_pressed(fire_button_mouse.into_iter().cloned())
-        || keyboard.any_pressed(fire_button.into_iter().cloned());
+    let pressed = mouse.any_pressed(fire_button_mouse.iter().cloned())
+        || keyboard.any_pressed(fire_button.iter().cloned());
     for (id, material) in target_material.iter_mut() {
         if pressed && active_materials.contains_key(&id) {
             material.hovered = 1;
         } else {
             material.hovered = 0;
-            active_materials.get(&id).map(|entity| {
+            if let Some(entity) = active_materials.get(&id) {
                 commands.entity(*entity).try_remove::<Active>();
-            });
+            }
         }
     }
 }

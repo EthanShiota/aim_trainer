@@ -1,10 +1,7 @@
-use bevy::{color::palettes::css::WHITE, prelude::*};
+use bevy::prelude::*;
 use bevy_egui::prelude::*;
 
-use crate::{
-    AudioBuffer, EditMode, PlayerCamera,
-    target_plugin::{BeatMap, Target, TargetMarker},
-};
+use crate::{AudioBuffer, EditMode, target_plugin::Target};
 
 pub struct EditPlugin;
 impl Plugin for EditPlugin {

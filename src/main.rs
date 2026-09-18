@@ -11,9 +11,7 @@ use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::audio::AddAudioSource;
 use bevy::camera::Projection::Perspective;
 use bevy::camera::{CameraOutputMode, Exposure};
-use bevy::pbr::{
-    AtmosphereMode, AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections,
-};
+use bevy::pbr::{AtmosphereSettings, ScreenSpaceReflections};
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
 use bevy::render::render_resource::{AsBindGroup, BlendState};
@@ -21,13 +19,11 @@ use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, Sett
 use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::buffer::SamplesBuffer;
-use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::hash::Hash;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::camera::visibility::RenderLayers;
-use bevy::color::palettes::css::{self, BLACK, LIGHT_BLUE};
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
 use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricFog, VolumetricLight};
@@ -40,7 +36,7 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
-use crate::target_plugin::{Active, BeatMap, DebugMode, Marker, Target, TargetResource};
+use crate::target_plugin::{DebugMode, Marker, Target, TargetResource};
 
 #[derive(Resource, Clone, SettingsGroup, Reflect)]
 #[reflect(Resource, SettingsGroup, Default)]
@@ -303,12 +299,12 @@ fn playing(
         .mousebinds
         .get(&GameAction::FireWeapon)
         .unwrap();
-    if mouse_input.any_just_pressed(fire_button_mouse.into_iter().copied())
-        || keyboard_input.any_just_pressed(fire_button.into_iter().copied())
+    if mouse_input.any_just_pressed(fire_button_mouse.iter().copied())
+        || keyboard_input.any_just_pressed(fire_button.iter().copied())
     {
         commands.run_system_cached(fire_weapon);
-    } else if mouse_input.any_pressed(fire_button_mouse.into_iter().copied())
-        || keyboard_input.any_pressed(fire_button.into_iter().copied())
+    } else if mouse_input.any_pressed(fire_button_mouse.iter().copied())
+        || keyboard_input.any_pressed(fire_button.iter().copied())
     {
         commands.run_system_cached_with(fire_weapon_held, time.delta());
     }

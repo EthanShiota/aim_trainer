@@ -1,10 +1,8 @@
 use std::time::Duration;
 
-use bevy::{
-    app::AnimationSystems, color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection,
-};
+use bevy::{color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection};
 
-use crate::{AppState, target_plugin::Marker};
+use crate::AppState;
 pub struct ScoringPlugin;
 
 #[derive(Resource, Default)]
@@ -49,7 +47,7 @@ impl Lifetime {
 
     pub fn hit_error(&self) -> i32 {
         // 400ms is max error before marker will despawn
-        let hit_error = (self.remaining().as_millis() as i32 - 400) as i32;
+        let hit_error = self.remaining().as_millis() as i32 - 400;
         debug!("hit error: {}", hit_error);
         hit_error
     }

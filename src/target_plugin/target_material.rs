@@ -1,10 +1,7 @@
 use bevy::{
-    color::{
-        ColorCurve,
-        palettes::{
-            css::BLUE_VIOLET,
-            tailwind::{GREEN_300, RED_800},
-        },
+    color::palettes::{
+        css::BLUE_VIOLET,
+        tailwind::{GREEN_300, RED_800},
     },
     prelude::*,
     render::render_resource::AsBindGroup,

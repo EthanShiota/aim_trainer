@@ -16,10 +16,8 @@ use bevy::{
     tasks::{Task, futures::check_ready},
     window::PrimaryWindow,
 };
-use bevy_egui::{
-    egui::{Color32, Ui, UiBuilder},
-    prelude::*,
-};
+use bevy_egui::egui::Ui;
+use bevy_egui::{egui::UiBuilder, prelude::*};
 use rfd::FileDialog;
 use zip::{ZipArchive, result::ZipError};
 
@@ -138,11 +136,6 @@ fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSett
     ));
 }
 
-fn color(c: Srgba) -> Color32 {
-    let [r, g, b, a] = c.to_u8_array();
-    Color32::from_rgba_unmultiplied_const(r, g, b, a)
-}
-
 #[derive(Component)]
 struct SelectedFile(Task<Option<PathBuf>>);
 
@@ -193,7 +186,7 @@ fn main_menu(
                 // Dialog can return None
                 if let Some(path) = filepath {
                     debug!("path: {path:?}");
-                    unzip_beatmap(&Path::new(beatmap_dir), &path).unwrap();
+                    unzip_beatmap(Path::new(beatmap_dir), &path).unwrap();
                     *beat_maps = serialize_beatmaps(beatmap_dir);
                 }
                 commands.entity(entity).remove::<SelectedFile>();

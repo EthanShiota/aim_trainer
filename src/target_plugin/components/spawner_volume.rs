@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use bevy::{math::sampling::UniformMeshSampler, prelude::*};
 use rand::distr::Distribution;
 
@@ -36,7 +37,6 @@ impl From<Mesh3d> for SpawnerVolume {
     fn from(_value: Mesh3d) -> Self {
         log::info!("hit form handle<mesh>");
         todo!();
-        Self::default();
     }
 }
 

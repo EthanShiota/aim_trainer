@@ -2,13 +2,9 @@ use std::time::Duration;
 
 use crate::AppState;
 use crate::scoreing::{Lifetime, Score};
+use crate::target_plugin::events::TargetDestroyed;
 use crate::target_plugin::events::TargetHit;
-use crate::target_plugin::messages::*;
-use crate::{fps_camera::Hovered, target_plugin::events::TargetDestroyed};
-use bevy::{
-    color::palettes::{css::BLUE_VIOLET, tailwind::RED_800},
-    prelude::*,
-};
+use bevy::prelude::*;
 
 use crate::target_plugin::{TargetMaterial, TargetResource};
 
@@ -70,10 +66,11 @@ pub fn on_target_hit(
                 }
                 *count == 0
             }
-            Target::Duration(duration) => {
+            Target::Duration(_duration) => {
                 // *duration = duration.saturating_sub(time.delta());
                 // score.points += 1;
                 // duration.is_zero()
+                // TODO: Handle; linked to curve and scoring
                 false
             }
         };

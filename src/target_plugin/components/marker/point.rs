@@ -1,23 +1,10 @@
-use bevy::{
-    animation::{AnimatedBy, AnimationTargetId, animated_field},
-    asset::uuid::Uuid,
-    color::palettes::tailwind::RED_800,
-    prelude::*,
-};
-use std::{
-    f32::{self},
-    time::Duration,
-};
+use bevy::{color::palettes::tailwind::RED_800, prelude::*};
+use std::time::Duration;
 
-use crate::{
-    AppState,
-    scoreing::Lifetime,
-    target_plugin::{
-        Target, TargetMaterial, TargetResource,
-        components::{marker::Marker, target, timing_ring::TimingRing},
-        events::SpawnHint,
-    },
+use crate::target_plugin::{
+    Target, TargetMaterial, TargetResource, components::target, events::SpawnHint,
 };
+use crate::{AppState, scoreing::Lifetime};
 
 pub struct TargetMarkerPlugin;
 impl Plugin for TargetMarkerPlugin {

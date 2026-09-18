@@ -1,7 +1,6 @@
 use std::{fmt::Debug, time::Duration};
 
 use bevy::prelude::*;
-use tracing::instrument;
 
 use crate::{
     AppState, AudioBuffer,
@@ -39,13 +38,13 @@ impl Marker {
         let Some(preempt_timer) = spawn_time.checked_sub(preempt) else {
             warn!("Preempt begins before start of map!");
             return Self {
-                spawn_time: spawn_time,
+                spawn_time,
                 preempt: Duration::ZERO,
             };
         };
 
         Self {
-            spawn_time: spawn_time,
+            spawn_time,
             preempt: preempt_timer,
         }
     }
