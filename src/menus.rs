@@ -152,9 +152,10 @@ fn main_menu(
     //     style.visuals = vis;
     // });
     let beatmap_dir = "osu_beatmaps";
-    if beat_maps.is_empty() {
+    // don't spin when beatmap_dir is empty
+    once!(if beat_maps.is_empty() {
         *beat_maps = serialize_beatmaps(beatmap_dir);
-    }
+    });
 
     egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
         // Import new beatmap
@@ -162,6 +163,13 @@ fn main_menu(
             let thread_pool = bevy::tasks::AsyncComputeTaskPool::get();
             let task = thread_pool.spawn(async move { FileDialog::new().pick_file() });
             commands.spawn(SelectedFile(task));
+        }
+        if ui
+            .button("Reload beatmaps")
+            .on_hover_text("This reloads beatmaps from the osu_beatmaps directory.")
+            .clicked()
+        {
+            *beat_maps = serialize_beatmaps(beatmap_dir);
         }
 
         for (mut file, entity) in selected_file.iter_mut() {
@@ -279,13 +287,22 @@ fn unzip_beatmap(base_dir: &Path, beatmap_path: &Path) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-// TODO: Remove unwraps
+// TODO: Async
 fn serialize_beatmaps(beatmap_dir: &str) -> Vec<Vec<BeatMapOsu>> {
     let now = time::Instant::now();
     let mut count = 0;
     debug!("begin serialization");
     let mut beat_maps = vec![];
-    for file in std::fs::read_dir(beatmap_dir).unwrap().flat_map(|w| w.ok()) {
+    if let Ok(exists) = std::fs::exists(beatmap_dir)
+        && !exists
+    {
+        // create beatmap_dir if it doesn't exist
+        std::fs::create_dir(beatmap_dir).expect("could not create {beatmap_dir}!");
+    }
+    for file in std::fs::read_dir(beatmap_dir)
+        .expect("could not read beatmap dir")
+        .flat_map(|w| w.ok())
+    {
         let mut versions = vec![];
         for ent in file.path().read_dir().unwrap() {
             if let Some(map) = ent.ok().and_then(|dir| BeatMapOsu::new(dir.path()).ok()) {

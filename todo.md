@@ -28,7 +28,13 @@
 ## UX
 
 - [x] Import beatmap dialog or flow
+- [ ] Better visual for hit object
+- [ ] slider tracking area should increase when it is being tracked
+- [ ] all the indicators for stuff, can try shrinking indicators
+- [ ] fov settings
 
 ## Bugs
+
+- [x] Panic when osu_beatmap doesn't exist
 
 Better logs
