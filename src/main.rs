@@ -10,6 +10,7 @@ mod target_plugin;
 
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::audio::AddAudioSource;
+use bevy::camera::Projection::Perspective;
 use bevy::camera::{CameraOutputMode, Exposure};
 use bevy::math::primitives;
 use bevy::pbr::{
@@ -22,6 +23,7 @@ use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, Sett
 use bevy_egui::egui::Widget;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::buffer::SamplesBuffer;
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::hash::Hash;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -47,8 +49,11 @@ use crate::target_plugin::{Active, BeatMap, DebugMode, Marker, Target, TargetRes
 #[settings_group(group = "general")]
 pub struct GameSettings {
     pub volume: f32,
+    // in / 360
     pub mouse_sensitivity: f32,
     pub dpi: usize,
+    // Vertical Camera fov
+    pub fov: f32,
     pub keybinds: HashMap<GameAction, Vec<KeyCode>>,
     pub mousebinds: HashMap<GameAction, Vec<MouseButton>>,
 }
@@ -64,6 +69,7 @@ impl Default for GameSettings {
             volume: 1.0,
             mouse_sensitivity: 16.351,
             dpi: 800,
+            fov: 1.0112001,
             keybinds: [(GameAction::FireWeapon, vec![KeyCode::KeyX, KeyCode::KeyZ])]
                 .into_iter()
                 .collect(),
@@ -433,6 +439,7 @@ impl Material for SkyMaterial {
 
 fn light_and_cameras(
     mut commands: Commands,
+    game_settings: Res<GameSettings>,
     _scattering_mediums: ResMut<Assets<ScatteringMedium>>,
     _images: ResMut<Assets<Image>>,
     _asset_server: ResMut<AssetServer>,
@@ -485,6 +492,10 @@ fn light_and_cameras(
             is_active: true,
             ..default()
         },
+        Perspective(PerspectiveProjection {
+            fov: game_settings.fov,
+            ..default()
+        }),
         (
             AtmosphereSettings::default(),
             Exposure::SUNLIGHT,
@@ -562,6 +573,8 @@ fn toggle_fullscreen(
     }
 }
 
+/// Syncs Game Settings from resource to wherever they need to be applied
+/// Also saves to settings file
 fn sync_game_settings(
     settings: Res<GameSettings>,
     mut fps_config: ResMut<crate::fps_camera::FPSCameraConfig>,
@@ -575,7 +588,7 @@ fn sync_game_settings(
     for mut sink in q_sink.iter_mut() {
         sink.set_volume(bevy::audio::Volume::Linear(settings.volume));
     }
-    commands.queue(SaveSettingsSync::Always);
+    commands.queue(SaveSettingsSync::IfChanged);
 }
 
 fn on_sound_event(

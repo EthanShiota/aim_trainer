@@ -211,7 +211,7 @@ fn on_spawn_hint(
                 }
                 commands
                     .entity(e.event_target())
-                    .insert(Target::Duration(time.elapsed().abs_diff(end_time)))
+                    .insert(Target::Duration(anim_duration))
                     .insert(Lifetime::duration(anim_duration));
 
                 commands.entity(e.observer()).despawn();

@@ -1,5 +1,6 @@
 use std::{
     error::Error,
+    f32::consts::{PI, TAU},
     fs, io,
     path::{Path, PathBuf},
     time,
@@ -8,10 +9,12 @@ use std::{
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
     color::palettes::css,
+    math::AspectRatio,
     prelude::*,
     render::render_resource::BlendState,
     settings::SaveSettings,
     tasks::{Task, futures::check_ready},
+    window::PrimaryWindow,
 };
 use bevy_egui::{
     egui::{Color32, Ui, UiBuilder},
@@ -74,6 +77,7 @@ fn settings_window(
     mut contexts: EguiContexts,
     mut settings: If<ResMut<GameSettings>>,
     mut confirm: Local<bool>,
+    window: Single<&Window, With<PrimaryWindow>>,
     mut commands: Commands,
 ) -> Result {
     egui::Window::new("Settings").show(contexts.ctx_mut()?, |ui| {
@@ -93,6 +97,18 @@ fn settings_window(
                     .text("Mouse Sensitivity"),
             );
             ui.add(egui::Slider::new(&mut settings.dpi, 400..=3200).text("DPI"));
+            ui.add(
+                egui::Slider::new(&mut settings.fov, 0.0..=PI)
+                    .text("Vertical FOV in radians")
+                    .step_by(0.0),
+            );
+            let a: AspectRatio =
+                AspectRatio::try_from(window.size()).unwrap_or(AspectRatio::SIXTEEN_NINE);
+            ui.label(format!(
+                "Vertical FOV: {} degrees\nHorizontal FOV: {}",
+                settings.fov * (360. / TAU),
+                settings.fov * (360. / TAU) * a.ratio()
+            ));
             if ui.button("reset").clicked() {
                 *confirm = true;
             }
