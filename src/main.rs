@@ -2,7 +2,6 @@
 mod edit_mode;
 mod effects;
 mod fps_camera;
-mod materials;
 mod menus;
 mod scenarios;
 mod scoreing;
@@ -12,7 +11,6 @@ use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::audio::AddAudioSource;
 use bevy::camera::Projection::Perspective;
 use bevy::camera::{CameraOutputMode, Exposure};
-use bevy::math::primitives;
 use bevy::pbr::{
     AtmosphereMode, AtmosphereSettings, DefaultOpaqueRendererMethod, ScreenSpaceReflections,
 };
