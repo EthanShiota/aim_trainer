@@ -440,9 +440,7 @@ impl Material for SkyMaterial {
 fn light_and_cameras(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
-    _scattering_mediums: ResMut<Assets<ScatteringMedium>>,
-    _images: ResMut<Assets<Image>>,
-    _asset_server: ResMut<AssetServer>,
+    asset_server: ResMut<AssetServer>,
 ) {
     commands.spawn((
         DirectionalLight {
@@ -460,14 +458,24 @@ fn light_and_cameras(
         DespawnOnExit(AppState::InGame),
     ));
 
+    // commands.spawn_scene(bsn! {
+    //     #ORB
+    //     Mesh3d(asset_value(primitives::Cylinder::new(100.,1.).mesh()))
+    //     MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
+    //     Transform {
+    //         translation: vec3(0., -80., 0.),
+    //     }
+    //     DespawnOnExit::<AppState>(AppState::InGame)
+    // });
+    let gltf_scene: Handle<WorldAsset> =
+        asset_server.load(GltfAssetLabel::Scene(0).from_asset("terrain/terrian.glb"));
     commands.spawn_scene(bsn! {
-        #ORB
-        Mesh3d(asset_value(primitives::Cylinder::new(100.,1.).mesh()))
-        MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
+        #Terrain
+        WorldAssetRoot(gltf_scene)
         Transform {
-            translation: vec3(0., -80., 0.),
+            scale: Vec3::splat(10.)
         }
-        DespawnOnExit::<AppState>(AppState::InGame)
+        DespawnOnExit<AppState>(AppState::InGame)
     });
 
     commands.spawn_scene(bsn! {
