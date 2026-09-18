@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, path::PathBuf};
 
 use nom::{
-    IResult, Input, Parser,
+    IResult, Parser,
     bytes::{
         complete::{is_not, tag},
         take_until,
@@ -10,14 +10,12 @@ use nom::{
         char,
         complete::{alphanumeric1, line_ending, multispace0, multispace1, not_line_ending, one_of},
     },
-    combinator::{eof, map, opt, recognize, rest},
+    combinator::{map, opt, recognize, rest},
     error::context,
     multi::{many0, many1, separated_list1},
     number::complete::recognize_float,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
 };
-
-use crate::CurveType::Bezier;
 
 #[derive(Clone, Debug)]
 pub struct HitObject {
@@ -408,10 +406,11 @@ fn nom_parser_test() {
 
 #[test]
 fn hit_object_test() {
+    use crate::CurveType::Bezier;
     let input = include_str!(
         "../test/Windbell - Flow of Life (TSAR  Tu Zi ST Remix) (vivicat) [Extra].osu"
     );
-    let (_, (metadata, res)) = parser(input).unwrap();
+    let (_, (_metadata, res)) = parser(input).unwrap();
     let map: std::collections::HashMap<_, _> = res.into_iter().collect();
     if let Some(OsuValue::LIST(list)) = map.get(&OsuHeader::HitObjects) {
         let hit_objs: Vec<HitObject> = list
