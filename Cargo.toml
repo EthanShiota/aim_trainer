@@ -16,6 +16,7 @@ bevy = { version = "0.19.1", features = [
   "bevy_ui",
   "bevy_settings",
   "serialize",
+  "jpeg",
 ] }
 bevy_egui = "0.40.0"
 bevy_skein = "0.6.0"
