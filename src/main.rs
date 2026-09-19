@@ -2,6 +2,7 @@
 mod edit_mode;
 mod effects;
 mod fps_camera;
+mod input;
 mod menus;
 mod scenarios;
 mod scoreing;
@@ -35,6 +36,7 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
+use crate::input::InputMessage;
 use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
 use crate::target_plugin::{DebugMode, Marker, Target, TargetResource};
 
@@ -115,6 +117,7 @@ fn main() {
             edit_mode::EditPlugin,
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
+            input::GameInputPlugin,
             bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
             WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
         ))
@@ -150,7 +153,7 @@ fn main() {
             (
                 global_bindings,
                 game_loop.run_if(in_state(AppState::InGame)),
-                playing.run_if(in_state(GameState::Playing)),
+                playing_binds.run_if(in_state(GameState::Playing)),
             ),
         )
         // INFO: Egui context systems
@@ -286,27 +289,18 @@ struct PlayerCamera;
 //     Ok(())
 // }
 
-// TODO: Unified GameActive::FireWeapon handling so we don't redo work
-fn playing(
+fn playing_binds(
     mut commands: Commands,
-    mouse_input: Res<ButtonInput<MouseButton>>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time<Virtual>>,
-    game_settings: Res<GameSettings>,
+    mut reader: PopulatedMessageReader<InputMessage>,
 ) {
-    let fire_button = game_settings.keybinds.get(&GameAction::FireWeapon).unwrap();
-    let fire_button_mouse = game_settings
-        .mousebinds
-        .get(&GameAction::FireWeapon)
-        .unwrap();
-    if mouse_input.any_just_pressed(fire_button_mouse.iter().copied())
-        || keyboard_input.any_just_pressed(fire_button.iter().copied())
-    {
-        commands.run_system_cached(fire_weapon);
-    } else if mouse_input.any_pressed(fire_button_mouse.iter().copied())
-        || keyboard_input.any_pressed(fire_button.iter().copied())
-    {
-        commands.run_system_cached_with(fire_weapon_held, time.delta());
+    for msg in reader.read() {
+        match msg {
+            InputMessage::FireWeapon => commands.run_system_cached(fire_weapon),
+            InputMessage::FireWeaponHeld => {
+                commands.run_system_cached_with(fire_weapon_held, time.delta())
+            }
+        }
     }
 }
 

@@ -17,7 +17,7 @@ pub struct DebugMode(pub bool);
 mod target_resource;
 pub use target_resource::TargetResource;
 
-use crate::{AppState, GameAction, GameSettings};
+use crate::{AppState, GameAction, GameSettings, input::InputMessage};
 
 pub struct TargetPlugin;
 
@@ -118,49 +118,35 @@ fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 #[derive(Component)]
 pub struct Active;
 
-// TODO: Unified GameActive::FireWeapon handling so we don't redo work
 fn add_effect(
     hovered: Query<(Entity, &Marker, &MeshMaterial3d<TargetMaterial>), With<Hovered>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    game_settings: If<Res<GameSettings>>,
     mut commands: Commands,
+    mut reader: PopulatedMessageReader<InputMessage>,
 ) {
-    let fire_button = game_settings.keybinds.get(&GameAction::FireWeapon).unwrap();
-    let fire_button_mouse = game_settings
-        .mousebinds
-        .get(&GameAction::FireWeapon)
-        .unwrap();
-    if (mouse.any_just_pressed(fire_button_mouse.iter().cloned())
-        || keyboard.any_just_pressed(fire_button.iter().cloned()))
-        && let Some(target) = hovered
-            .into_iter()
-            .sort_by_key::<&Marker, _>(|m| m.time())
-            .next()
-    {
-        commands.entity(target.0).try_insert(Active);
+    for msg in reader.read() {
+        if let InputMessage::FireWeapon = msg
+            && let Some(target) = hovered
+                .into_iter()
+                .sort_by_key::<&Marker, _>(|m| m.time())
+                .next()
+        {
+            commands.entity(target.0).try_insert(Active);
+        }
     }
 }
 
-// TODO: Unified GameActive::FireWeapon handling so we don't redo work
 fn sync_effect(
     active: Query<(&MeshMaterial3d<TargetMaterial>, Entity), (With<Active>, With<Hovered>)>,
     mut target_material: ResMut<Assets<TargetMaterial>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    game_settings: If<Res<GameSettings>>,
+    mut reader: MessageReader<InputMessage>,
     mut commands: Commands,
 ) {
     let active_materials: std::collections::HashMap<AssetId<TargetMaterial>, Entity> =
         active.into_iter().map(|(mat, e)| (mat.id(), e)).collect();
 
-    let fire_button = game_settings.keybinds.get(&GameAction::FireWeapon).unwrap();
-    let fire_button_mouse = game_settings
-        .mousebinds
-        .get(&GameAction::FireWeapon)
-        .unwrap();
-    let pressed = mouse.any_pressed(fire_button_mouse.iter().cloned())
-        || keyboard.any_pressed(fire_button.iter().cloned());
+    let pressed = reader
+        .read()
+        .any(|msg| matches!(msg, InputMessage::FireWeaponHeld));
     for (id, material) in target_material.iter_mut() {
         if pressed && active_materials.contains_key(&id) {
             material.hovered = 1;
