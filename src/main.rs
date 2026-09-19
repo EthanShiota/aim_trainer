@@ -99,7 +99,7 @@ fn main() {
                     primary_window: Window {
                         title: "Aim Game".to_string(),
                         resizable: true,
-                        present_mode: bevy::window::PresentMode::Mailbox,
+                        present_mode: bevy::window::PresentMode::Immediate,
                         fit_canvas_to_parent: true,
                         prevent_default_event_handling: true,
                         ..default()
@@ -589,7 +589,7 @@ fn sync_game_settings(
 
 fn on_sound_event(
     e: On<CurveSoundEvent>,
-    hovered: Query<(), With<Hovered>>,
+    hovered: Query<(), (With<Hovered>, With<target_plugin::Active>)>,
     mut commands: Commands,
     asset_server: ResMut<AssetServer>,
 ) {

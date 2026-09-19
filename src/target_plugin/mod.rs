@@ -17,7 +17,7 @@ pub struct DebugMode(pub bool);
 mod target_resource;
 pub use target_resource::TargetResource;
 
-use crate::{AppState, GameAction, GameSettings, input::InputMessage};
+use crate::{AppState, input::InputMessage};
 
 pub struct TargetPlugin;
 
@@ -41,12 +41,7 @@ impl Plugin for TargetPlugin {
             .add_plugins(MaterialPlugin::<TargetMaterial>::default())
             .add_plugins(MarkerPlugin)
             .add_plugins(TimingRingPlugin)
-            .add_systems(
-                Update,
-                add_effect
-                    .in_set(TargetSchedule)
-                    .before(RunFixedMainLoopSystems::FixedMainLoop),
-            )
+            .add_systems(Update, add_effect)
             .add_systems(Update, sync_effect)
             // INFO: Gizmo
             .insert_gizmo_config(

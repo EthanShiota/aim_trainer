@@ -65,7 +65,7 @@ fn linear_curve(points: &[Vec2], curve_duration: f32, slides: usize) -> SampleAu
             FunctionCurve::new(c.domain(), Box::new(move |t| c.sample_unchecked(t)))
         })
         .unwrap()
-        .reparametrize_linear(Interval::new(0., curve_duration / slides as f32).unwrap())
+        .reparametrize_linear(Interval::new(0., curve_duration).unwrap())
         .unwrap();
     loop_curve(curve, slides, curve_duration)
 }
@@ -165,6 +165,7 @@ pub fn osu(
                 } else {
                     // slider velocity
                     state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
+                    debug!("{:#?}", state.slider_velocity);
                 }
                 state.previous_timing_point = next_timing_point.time;
                 state.timing_point_iter.next();
@@ -176,7 +177,7 @@ pub fn osu(
             // AR = 5: preempt = 1200ms
             // AR > 5: preempt = 1200ms - 150ms * (AR - 5)
             let preempt_ms = match ar {
-                ar if (0. ..5.).contains(&ar) => 1200. + 120. * (5. - ar),
+                ar if ar > 0. && ar < 5. => 1200. + 120. * (5. - ar),
                 ar if ar > 5. && ar <= 10. => 1200. - 150. * (ar - 5.),
                 5. => 1200.,
                 err => {
@@ -204,8 +205,14 @@ pub fn osu(
                 let curve_duration = (((length
                     / (slider_multiplier * 100. * state.slider_velocity))
                     * state.beat_length)
-                    / 1000.)
-                    * slides as f32;
+                    / 1000.);
+
+                println!("{}", state.beat_length);
+                println!(
+                    "{t} -> {:?} @ {}",
+                    curve_duration * 1000.,
+                    t as f32 + curve_duration * 1000.
+                );
 
                 state.target_curves.push(create_curve_marker(
                     &curve_type,
@@ -271,9 +278,7 @@ fn create_curve_marker(
             let curve = loop_curve(
                 points_to_bezier(points)
                     .map(convert_osu_pixels_to_world)
-                    .reparametrize_linear(
-                        Interval::new(0., curve_duration / slides as f32).unwrap(),
-                    )
+                    .reparametrize_linear(Interval::new(0., curve_duration).unwrap())
                     .unwrap(),
                 slides,
                 curve_duration,
@@ -282,7 +287,7 @@ fn create_curve_marker(
             (
                 CurveMarker {
                     curve,
-                    duration: curve_duration,
+                    duration: curve_duration * slides as f32,
                     slides,
                 },
                 Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
@@ -296,7 +301,7 @@ fn create_curve_marker(
                 CurveMarker {
                     curve,
                     slides,
-                    duration: curve_duration,
+                    duration: curve_duration * slides as f32,
                 },
                 Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
             )
@@ -334,7 +339,7 @@ fn create_curve_marker(
                 );
                 xy.extend(z)
             })
-            .reparametrize_linear(Interval::new(0., curve_duration / slides as f32).unwrap())
+            .reparametrize_linear(Interval::new(0., curve_duration).unwrap())
             .unwrap();
 
             let curve = loop_curve(unlooped_curve, slides, curve_duration);
@@ -343,7 +348,7 @@ fn create_curve_marker(
                 CurveMarker {
                     slides,
                     curve,
-                    duration: curve_duration,
+                    duration: curve_duration * slides as f32,
                 },
                 Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
             )
@@ -369,8 +374,11 @@ fn loop_curve(
         .unwrap()
         .repeat(slides / 2)
         .unwrap()
-        .reparametrize(Interval::new(0., curve_duration).unwrap(), |i| i)
-        .resample_auto(100 * slides)
+        .reparametrize(
+            Interval::new(0., curve_duration * slides as f32).unwrap(),
+            |i| i,
+        )
+        .resample_auto(300 * slides)
         .unwrap()
 }
 
@@ -380,7 +388,12 @@ fn extract_nary_bezier(points: &[Vec2]) -> Vec<Vec<Vec2>> {
     for [curr, next] in points.array_windows::<2>() {
         curr_curve.push(*curr);
         if curr == next {
-            curves.push(curr_curve.clone());
+            if curr_curve.len() == 1 {
+                // eat curve because why is it like this
+                warn!("beatmap has curves with zero length segments");
+            } else {
+                curves.push(curr_curve.clone());
+            }
             curr_curve.clear();
         }
     }

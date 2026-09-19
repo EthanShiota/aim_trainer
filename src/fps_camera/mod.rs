@@ -53,13 +53,7 @@ pub struct FPSCameraPlugin;
 impl Plugin for FPSCameraPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(FPSCameraConfig::default())
-            .add_systems(
-                RunFixedMainLoop,
-                (update, update_raycast)
-                    .chain()
-                    .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop)
-                    .before(TargetSchedule),
-            )
+            .add_systems(PreUpdate, (update, update_raycast).chain())
             .add_systems(PostUpdate, remove_hovered.after(AnimationSystems));
     }
 }
