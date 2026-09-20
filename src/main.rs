@@ -292,13 +292,18 @@ struct PlayerCamera;
 fn playing_binds(
     mut commands: Commands,
     time: Res<Time<Virtual>>,
+    mut q_curve: Query<(Entity, &mut Target), (With<Hovered>, With<target_plugin::Active>)>,
+    q_point: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
     mut reader: PopulatedMessageReader<InputMessage>,
 ) {
+    if reader.len() > 1 {
+        warn!("more messages then expected!");
+    }
     for msg in reader.read() {
         match msg {
-            InputMessage::FireWeapon => commands.run_system_cached(fire_weapon),
+            InputMessage::FireWeapon => fire_weapon(q_point, &mut commands),
             InputMessage::FireWeaponHeld => {
-                commands.run_system_cached_with(fire_weapon_held, time.delta())
+                fire_weapon_held(time.delta(), &mut q_curve, &mut commands)
             }
         }
     }
@@ -496,7 +501,6 @@ fn light_and_cameras(
         (
             AtmosphereSettings::default(),
             Exposure::SUNLIGHT,
-            Bloom::ANAMORPHIC,
             AtmosphereEnvironmentMapLight::default(),
             VolumetricFog {
                 ambient_intensity: 0.0,
@@ -520,6 +524,7 @@ fn light_and_cameras(
         DespawnOnExit(AppState::InGame),
         Camera2d,
         RenderLayers::layer(1),
+        Projection::Orthographic(OrthographicProjection::default_2d()),
         Camera {
             order: 1,
             output_mode: CameraOutputMode::Write {
@@ -534,7 +539,7 @@ fn light_and_cameras(
 
 fn fire_weapon(
     q_hit: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
-    mut commands: Commands,
+    commands: &mut Commands,
 ) {
     let mut hits: Vec<_> = q_hit.into_iter().collect();
     hits.sort_by_key(|elm| elm.1);
@@ -544,9 +549,9 @@ fn fire_weapon(
 }
 
 fn fire_weapon_held(
-    In(delta): In<Duration>,
-    mut q_hit: Query<(Entity, &mut Target), (With<Hovered>, With<target_plugin::Active>)>,
-    mut commands: Commands,
+    delta: Duration,
+    q_hit: &mut Query<(Entity, &mut Target), (With<Hovered>, With<target_plugin::Active>)>,
+    commands: &mut Commands,
 ) {
     for (entity, mut target) in q_hit.iter_mut() {
         if let Target::Duration(dur) = target.as_mut() {
