@@ -117,6 +117,7 @@ fn settings_window(
 
 fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
     egui_global_settings.auto_create_primary_context = false;
+
     // Egui Camera
     commands.spawn((
         // The `PrimaryEguiContext` component requires everything needed to render a primary context.
@@ -124,6 +125,7 @@ fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSett
         Camera2d,
         // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
         RenderLayers::none(),
+        Msaa::Off,
         Camera {
             order: 2,
             output_mode: CameraOutputMode::Write {

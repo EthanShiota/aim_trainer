@@ -8,17 +8,24 @@ mod scenarios;
 mod scoreing;
 mod target_plugin;
 
+use bevy::anti_alias::contrast_adaptive_sharpening::ContrastAdaptiveSharpening;
+use bevy::anti_alias::fxaa::Fxaa;
+use bevy::anti_alias::smaa::{Smaa, SmaaPreset};
 use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::audio::AddAudioSource;
 use bevy::camera::Projection::Perspective;
 use bevy::camera::{CameraOutputMode, Exposure};
+use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::dev_tools::diagnostics_overlay::{DiagnosticsOverlay, DiagnosticsOverlayPlugin};
+use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::light::cluster::{ClusterConfig, GlobalClusterSettings};
 use bevy::pbr::{AtmosphereSettings, ScreenSpaceReflections};
 use bevy::platform::collections::HashMap;
-use bevy::post_process::bloom::Bloom;
-use bevy::render::render_resource::{AsBindGroup, BlendState};
+use bevy::render::render_resource::{
+    AsBindGroup, BlendState, Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor,
+};
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy_egui::egui::Widget;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
 use std::path::PathBuf;
@@ -27,10 +34,11 @@ use std::time::Duration;
 use bevy::camera::visibility::RenderLayers;
 use bevy::light::atmosphere::ScatteringMedium;
 use bevy::light::light_consts::lux;
-use bevy::light::{Atmosphere, AtmosphereEnvironmentMapLight, VolumetricFog, VolumetricLight};
+use bevy::light::{
+    Atmosphere, AtmosphereEnvironmentMapLight, Skybox, VolumetricFog, VolumetricLight,
+};
 use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
-use bevy_skein::SkeinPlugin;
 
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
@@ -99,7 +107,7 @@ fn main() {
                     primary_window: Window {
                         title: "Aim Game".to_string(),
                         resizable: true,
-                        present_mode: bevy::window::PresentMode::Immediate,
+                        present_mode: bevy::window::PresentMode::Mailbox,
                         fit_canvas_to_parent: true,
                         prevent_default_event_handling: true,
                         ..default()
@@ -112,14 +120,16 @@ fn main() {
                     ..default()
                 }),
             FPSCameraPlugin,
-            SkeinPlugin::default(),
+            // SkeinPlugin::default(),
+            FrameTimeDiagnosticsPlugin::default(),
+            DiagnosticsOverlayPlugin,
             EguiPlugin::default(),
             edit_mode::EditPlugin,
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
             input::GameInputPlugin,
-            bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
-            WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
+            // bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
+            // WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()
@@ -406,6 +416,17 @@ fn setup_ui(
         DespawnOnExit(AppState::InGame),
     ));
 
+    commands.spawn((
+        DiagnosticsOverlay {
+            title: "Fps".into(),
+            items: vec![
+                DiagnosticPath::new("fps").into(),
+                DiagnosticPath::new("frame_time").into(),
+            ],
+        },
+        DespawnOnExit(AppState::InGame),
+    ));
+
     Ok(())
 }
 
@@ -438,7 +459,8 @@ fn light_and_cameras(
 ) {
     commands.spawn((
         DirectionalLight {
-            shadow_maps_enabled: true,
+            shadow_maps_enabled: false,
+            affects_lightmapped_mesh_diffuse: false,
             // lux::RAW_SUNLIGHT is recommended for use with this feature, since
             // other values approximate sunlight *post-scattering* in various
             // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
@@ -448,7 +470,6 @@ fn light_and_cameras(
             ..default()
         },
         Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
-        VolumetricLight,
         DespawnOnExit(AppState::InGame),
     ));
 
@@ -479,7 +500,7 @@ fn light_and_cameras(
         //     color: RED_100.into()
         // }))
         Atmosphere {
-            medium: asset_value(ScatteringMedium::earth(128, 128)),
+            medium: asset_value(ScatteringMedium::earth(64, 64)),
             inner_radius: 60000.,
             outer_radius: 700000.
         }
@@ -499,19 +520,15 @@ fn light_and_cameras(
             ..default()
         }),
         (
-            AtmosphereSettings::default(),
-            Exposure::SUNLIGHT,
+            AtmosphereSettings {
+                rendering_method: bevy::pbr::AtmosphereMode::LookupTexture,
+                ..default()
+            },
             AtmosphereEnvironmentMapLight::default(),
-            VolumetricFog {
-                ambient_intensity: 0.0,
-                ..default()
-            },
+            Tonemapping::None,
+            Exposure::SUNLIGHT,
             Msaa::Off,
-            TemporalAntiAliasing::default(),
-            ScreenSpaceReflections {
-                min_perceptual_roughness: 0.0..0.0,
-                ..default()
-            },
+            Smaa::default(),
         ),
         Transform::from_xyz(0., 5., 0.),
         PlayerCamera,
@@ -523,6 +540,7 @@ fn light_and_cameras(
         Name::new("UI Camera"),
         DespawnOnExit(AppState::InGame),
         Camera2d,
+        Msaa::Off,
         RenderLayers::layer(1),
         Projection::Orthographic(OrthographicProjection::default_2d()),
         Camera {

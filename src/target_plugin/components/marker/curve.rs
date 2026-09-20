@@ -128,6 +128,7 @@ fn on_spawn_hint(
     time: Res<Time<Virtual>>,
     beat_map: If<Res<BeatMapResource>>,
 ) {
+    let now = std::time::Instant::now();
     let Ok((entity, marker, curve_marker)) = q_curve_marker.get(e.event_target()) else {
         return;
     };
@@ -238,13 +239,15 @@ fn on_spawn_hint(
         .insert((anim_id, AnimatedBy(slider)));
 
     commands.entity(slider).insert(ChildOf(hint));
-    debug!("spawn curve {slider:?}");
+    debug!(
+        "spawn curve {slider:?} in {:?}",
+        std::time::Instant::now().duration_since(now)
+    );
 }
 
 struct Segment {
     position: Vec3,
     normal: Vec3,
-    v: Vec3,
 }
 
 /// Takes curve and generates a position and derivative at some number of sample points
@@ -257,7 +260,7 @@ fn generate_curve_info(curve: impl Curve<Vec3> + Clone) -> Vec<Segment> {
 
     let step_size = curve.domain().length() / 200.;
 
-    let mut segements: Vec<Segment> = vec![];
+    let mut segements: Vec<Segment> = Vec::with_capacity(256);
 
     // Iterate over curve domain
     while domain.contains(t + step_size) {
@@ -272,12 +275,10 @@ fn generate_curve_info(curve: impl Curve<Vec3> + Clone) -> Vec<Segment> {
 
         // Get normalized orthogonal vector
         let v = tangent.rotate_z(f32::consts::FRAC_PI_2).normalize();
-        assert_eq!(v.z, 0.);
 
         segements.push(Segment {
             position: sample,
             normal: tangent,
-            v,
         });
 
         // Advance by stepsize
@@ -369,8 +370,9 @@ macro_rules! debug_mesh {
 }
 
 fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
+    let now = std::time::Instant::now();
     let resolution = 32;
-    let radius = 1.;
+    let radius = 1.5;
 
     let segments = generate_curve_info(curve);
 
@@ -417,7 +419,7 @@ fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
     // Two vertices for end caps
     assert!(vertices.len() - 2 == vertex_count);
 
-    Mesh::new(
+    let mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
@@ -492,5 +494,10 @@ fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
             )
             .map(|val| val as u32)
             .collect::<Vec<u32>>(),
-    ))
+    ));
+    debug!(
+        "Generated mesh in {:?}",
+        std::time::Instant::now().duration_since(now)
+    );
+    mesh
 }
