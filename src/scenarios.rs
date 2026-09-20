@@ -155,7 +155,7 @@ pub fn osu(
         |mut state, hit_obj| {
             let t = hit_obj.time;
 
-            if t > (state.previous_timing_point as usize)
+            while t > (state.previous_timing_point as usize)
                 && let Some(next_timing_point) = state.timing_point_iter.peek()
                 && t >= next_timing_point.time as usize
             {
@@ -165,7 +165,7 @@ pub fn osu(
                 } else {
                     // slider velocity
                     state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
-                    debug!("{:#?}", state.slider_velocity);
+                    debug!("{t} {:#?}", state.slider_velocity);
                 }
                 state.previous_timing_point = next_timing_point.time;
                 state.timing_point_iter.next();
@@ -207,8 +207,7 @@ pub fn osu(
                     * state.beat_length)
                     / 1000.);
 
-                println!("{}", state.beat_length);
-                println!(
+                debug!(
                     "{t} -> {:?} @ {}",
                     curve_duration * 1000.,
                     t as f32 + curve_duration * 1000.
