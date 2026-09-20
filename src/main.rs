@@ -343,6 +343,7 @@ fn debug_window(
                 ring_end,
                 mesh: _,
                 easing: _,
+                color_curve: _,
             } = target_resource.as_mut();
 
             egui::Slider::new(ring_start, 0.0..=3.0)

@@ -1,5 +1,8 @@
 use super::Hovered;
-use std::f32::consts::PI;
+use std::{
+    f32::consts::PI,
+    sync::{Arc, Mutex},
+};
 
 use bevy::{
     camera::visibility::RenderLayers, input::common_conditions::input_just_pressed, prelude::*,
@@ -103,11 +106,16 @@ impl Plugin for TargetPlugin {
 }
 
 fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
+    let color_curve =
+        Arc::new(Mutex::new((0..).map(|i| {
+            Oklcha::new(0.7507, 0.1372, (i as f32 * 4.) % 360., 1.).into()
+        })));
     commands.insert_resource(TargetResource {
         mesh: meshes.add(Sphere::new(2.)),
         ring_start: 0.,
         ring_end: PI / 2.,
         easing: EasingCurve::new(0., 1., EaseFunction::Linear),
+        color_curve,
     });
 }
 

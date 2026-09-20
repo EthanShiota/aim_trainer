@@ -123,7 +123,7 @@ fn on_spawn_hint(
     mut commands: Commands,
     mut animation_clips: ResMut<Assets<AnimationClip>>,
     mut animation_graphs: ResMut<Assets<AnimationGraph>>,
-    mut target_resource: Res<TargetResource>,
+    mut target_resource: ResMut<TargetResource>,
     asset_server: ResMut<AssetServer>,
     time: Res<Time<Virtual>>,
     beat_map: If<Res<BeatMapResource>>,

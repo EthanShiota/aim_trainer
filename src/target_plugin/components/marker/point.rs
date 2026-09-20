@@ -20,7 +20,7 @@ pub fn on_spawn_hint(
     e: On<SpawnHint>,
     mut commands: Commands,
     q_target_markers: Query<(Entity, &super::Marker, &Transform), With<TargetMarker>>,
-    target_resource: Res<TargetResource>,
+    mut target_resource: ResMut<TargetResource>,
 ) {
     let Ok((entity, marker, spawn_location)) = q_target_markers.get(e.event_target()) else {
         return;
@@ -30,21 +30,14 @@ pub fn on_spawn_hint(
     trace!("Begin Preempt");
     // spawn target
 
-    // Base material for target
-    let mat = TargetMaterial {
-        // TODO: Target Base Color
-        color: RED_800.into(),
-        ring: target_resource.ring_start,
-        ..Default::default()
-    };
-
     let miss_duration = Duration::from_millis(400);
 
     // Spawn Target
     let _target = commands.entity(entity).apply_scene(bsn! {
         target::FadeIn({Timer::new(preempt,TimerMode::Once)})
-        Mesh3d({target_resource.mesh.clone()})
-        MeshMaterial3d::<TargetMaterial>(asset_value(mat))
+        {target_resource.target_scene()}
+        // Mesh3d({target_resource.mesh.clone()})
+        // MeshMaterial3d::<TargetMaterial>(asset_value(mat))
         template_value(*spawn_location)
         DespawnOnExit::<AppState>(AppState::InGame)
         template_value(Target::Counter(1))
