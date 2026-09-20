@@ -173,7 +173,7 @@ fn on_spawn_hint(
 
     // INFO: add sound events
     let segment_duration = curve_marker.duration / curve_marker.slides as f32;
-    for slide in 0..=curve_marker.slides {
+    for slide in 1..=curve_marker.slides {
         let last = slide == curve_marker.slides;
         clip.add_event_to_target(
             anim_id,
@@ -217,10 +217,17 @@ fn on_spawn_hint(
                 commands.entity(e.observer()).despawn();
             },
         )
-        .observe(|e: On<TargetHit>, mut commands: Commands| {
-            commands.entity(e.event_target()).trigger(SpawnTarget);
-            commands.entity(e.observer()).despawn();
-        })
+        .observe(
+            |e: On<TargetHit>, mut commands: Commands, asset_server: ResMut<AssetServer>| {
+                commands.entity(e.event_target()).trigger(SpawnTarget);
+                commands.entity(e.event_target()).insert((
+                    AudioPlayer::new(asset_server.load("audio/Creams.ogg")),
+                    PlaybackSettings::REMOVE,
+                ));
+
+                commands.entity(e.observer()).despawn();
+            },
+        )
         .id();
 
     commands
