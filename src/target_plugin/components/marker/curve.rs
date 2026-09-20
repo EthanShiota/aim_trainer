@@ -147,7 +147,7 @@ fn on_spawn_hint(
     let mesh = create_curve_mesh(mesh_curve);
     debug!("spawn hint");
     // TODO: Make the curve despawn when the animation is done
-    commands.spawn_scene(bsn! {
+    let hint = commands.spawn_scene(bsn! {
         Name("Curve Path")
         Mesh3d(asset_value(mesh))
         // Transform {
@@ -158,7 +158,7 @@ fn on_spawn_hint(
 
         MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
         template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
-    });
+    }).id();
 
     // INFO: Spawns curve
     let mut clip = AnimationClip::default();
@@ -210,6 +210,9 @@ fn on_spawn_hint(
                     p.start(animation_node_index);
                 }
                 commands
+                    .entity(hint)
+                    .insert(Lifetime::duration(anim_duration));
+                commands
                     .entity(e.event_target())
                     .insert(Target::Duration(anim_duration))
                     .insert(Lifetime::duration(anim_duration));
@@ -234,6 +237,7 @@ fn on_spawn_hint(
         .entity(slider)
         .insert((anim_id, AnimatedBy(slider)));
 
+    commands.entity(slider).insert(ChildOf(hint));
     debug!("spawn curve {slider:?}");
 }
 

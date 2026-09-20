@@ -66,6 +66,7 @@ impl Plugin for TargetPlugin {
             .add_systems(
                 Update,
                 (components::target::tick, target_material::tick)
+                    .in_set(TargetSchedule)
                     .run_if(in_state(AppState::InGame)),
             )
             // INFO: Spawner Debug
@@ -123,6 +124,7 @@ fn add_effect(
         ),
         With<Hovered>,
     >,
+    q_curve: Query<(), With<CurveMarker>>,
     mut commands: Commands,
     mut reader: PopulatedMessageReader<InputMessage>,
 ) {
@@ -132,8 +134,10 @@ fn add_effect(
         .next()
     {
         for msg in reader.read() {
-            if let InputMessage::FireWeapon = msg {
-                target.3.scale = Vec3::splat(2.);
+            if let InputMessage::FireWeapon = msg
+                && q_curve.contains(target.0)
+            {
+                target.3.scale = Vec3::splat(1.5);
 
                 commands.entity(target.0).try_insert(Active);
             }
