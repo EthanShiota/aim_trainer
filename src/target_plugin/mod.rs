@@ -114,20 +114,31 @@ fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 pub struct Active;
 
 fn add_effect(
-    hovered: Query<(Entity, &Marker, &MeshMaterial3d<TargetMaterial>), With<Hovered>>,
+    hovered: Query<
+        (
+            Entity,
+            &Marker,
+            &MeshMaterial3d<TargetMaterial>,
+            &mut Transform,
+        ),
+        With<Hovered>,
+    >,
     mut commands: Commands,
     mut reader: PopulatedMessageReader<InputMessage>,
 ) {
-    for msg in reader.read() {
-        if let InputMessage::FireWeapon = msg
-            && let Some(target) = hovered
-                .into_iter()
-                .sort_by_key::<&Marker, _>(|m| m.time())
-                .next()
-        {
-            commands.entity(target.0).try_insert(Active);
+    if let Some(mut target) = hovered
+        .into_iter()
+        .sort_by_key::<&Marker, _>(|m| m.time())
+        .next()
+    {
+        for msg in reader.read() {
+            if let InputMessage::FireWeapon = msg {
+                target.3.scale = Vec3::splat(2.);
+
+                commands.entity(target.0).try_insert(Active);
+            }
         }
-    }
+    };
 }
 
 fn sync_effect(
