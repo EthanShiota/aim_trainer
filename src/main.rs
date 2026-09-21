@@ -511,9 +511,12 @@ fn light_and_cameras(
     //     RenderLayers::layer(0)
     //     DespawnOnExit::<AppState>(AppState::InGame)
     // });
-    let skybox: Handle<Image> = asset_server.load("textures/skybox/skybox.ktx2");
-    let radience: Handle<Image> = asset_server.load("textures/skybox/pmrem.ktx2");
-    let irradiance: Handle<Image> = asset_server.load("textures/skybox/iem.ktx2");
+    let skybox: Handle<Image> =
+        asset_server.load("textures/skybox/NightSky008/NightSkyHDRI008_8K_HDR_skybox.ktx2");
+    let diffuse: Handle<Image> =
+        asset_server.load("textures/skybox/NightSky008/NightSkyHDRI008_8K_HDR_diffuse.ktx2");
+    let specular: Handle<Image> =
+        asset_server.load("textures/skybox/NightSky008/NightSkyHDRI008_8K_HDR_specular.ktx2");
 
     commands.spawn((
         Camera3d::default(),
@@ -533,8 +536,8 @@ fn light_and_cameras(
                 ..default()
             },
             EnvironmentMapLight {
-                diffuse_map: irradiance,
-                specular_map: radience,
+                diffuse_map: diffuse,
+                specular_map: specular,
                 intensity: 5.,
                 ..default()
             },
