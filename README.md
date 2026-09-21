@@ -2,6 +2,10 @@
 
 A 3d aim trainer/game designed to allow playing osu! beatmaps in 3d.
 
+## Important
+
+Mouse sensitivity is in units of inches per 360 (in/360).
+
 ## Building
 
 Build the binary using
