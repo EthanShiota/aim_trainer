@@ -1,10 +1,34 @@
-# Build
+# Rhythm Aim Trainer
 
-To build:
+A 3d aim trainer/game designed to allow playing osu! beatmaps in 3d.
+
+## Building
+
+Build the binary using
+
+```rust
+cargo build --release
 ```
-cargo run
+
+Omit the `--release` flag to build in debug mode.
+
+This will create a binary in the `target/release` directory.
+This needs to be run in the main directory at the same level as the assets file.
+
+Alternatively to build and run.
+
+```rust
+cargo run --release
 ```
 
-## Attribution
+## Project Layout
 
-[Milky Way Skybox HDRI panorama](https://skfb.ly/oKvUJ) by Aliaksandr.melas is licensed under [Creative Commons Attribution](http://creativecommons.org/licenses/by/4.0/)
+`root`
+
+- `assets`
+  - Holds assets needed at runtime, audio, shaders, gltf scenes, skybox textures
+- `src`
+  - Game code
+- `crates`
+  - holds sub crates
+  - allows for higher optimization level for the beatmap parser
