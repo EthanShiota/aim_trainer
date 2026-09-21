@@ -1,5 +1,6 @@
 # Rhythm Aim Trainer
 
+![Image of gameplay](.github/gameplay.webp)
 A 3d aim trainer/game designed to allow playing osu! beatmaps in 3d.
 
 ## Important
