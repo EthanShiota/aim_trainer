@@ -18,6 +18,7 @@ bevy = { version = "0.19.1", features = [
   "serialize",
   "jpeg",
   "trace",
+  "ktx2",
   "trace_tracy",
 ] }
 bevy_egui = "0.40.0"

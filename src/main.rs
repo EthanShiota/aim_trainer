@@ -12,6 +12,7 @@ use bevy::anti_alias::contrast_adaptive_sharpening::ContrastAdaptiveSharpening;
 use bevy::anti_alias::fxaa::Fxaa;
 use bevy::anti_alias::smaa::{Smaa, SmaaPreset};
 use bevy::anti_alias::taa::TemporalAntiAliasing;
+use bevy::asset::RenderAssetUsages;
 use bevy::audio::AddAudioSource;
 use bevy::camera::Projection::Perspective;
 use bevy::camera::{CameraOutputMode, Exposure};
@@ -21,8 +22,10 @@ use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin, LogDiagnostic
 use bevy::light::cluster::{ClusterConfig, GlobalClusterSettings};
 use bevy::pbr::{AtmosphereSettings, ScreenSpaceReflections};
 use bevy::platform::collections::HashMap;
+use bevy::post_process::bloom::Bloom;
 use bevy::render::render_resource::{
     AsBindGroup, BlendState, Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor,
+    TextureViewDimension,
 };
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy_egui::egui::Widget;
@@ -456,22 +459,23 @@ fn light_and_cameras(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
     asset_server: ResMut<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
 ) {
-    commands.spawn((
-        DirectionalLight {
-            shadow_maps_enabled: false,
-            affects_lightmapped_mesh_diffuse: false,
-            // lux::RAW_SUNLIGHT is recommended for use with this feature, since
-            // other values approximate sunlight *post-scattering* in various
-            // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
-            // sun unfiltered by the atmosphere, so it is the proper input for
-            // sunlight to be filtered by the atmosphere.
-            illuminance: lux::RAW_SUNLIGHT,
-            ..default()
-        },
-        Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
-        DespawnOnExit(AppState::InGame),
-    ));
+    // commands.spawn((
+    //     DirectionalLight {
+    //         shadow_maps_enabled: false,
+    //         affects_lightmapped_mesh_diffuse: false,
+    //         // lux::RAW_SUNLIGHT is recommended for use with this feature, since
+    //         // other values approximate sunlight *post-scattering* in various
+    //         // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
+    //         // sun unfiltered by the atmosphere, so it is the proper input for
+    //         // sunlight to be filtered by the atmosphere.
+    //         illuminance: lux::RAW_SUNLIGHT,
+    //         ..default()
+    //     },
+    //     Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+    //     DespawnOnExit(AppState::InGame),
+    // ));
 
     // commands.spawn_scene(bsn! {
     //     #ORB
@@ -493,20 +497,23 @@ fn light_and_cameras(
         DespawnOnExit<AppState>(AppState::InGame)
     });
 
-    commands.spawn_scene(bsn! {
-        #Sky
-        // Mesh3d(asset_value(Sphere::new(1000.).mesh().ico(7).unwrap().with_inverted_winding().unwrap()))
-        // MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
-        //     color: RED_100.into()
-        // }))
-        Atmosphere {
-            medium: asset_value(ScatteringMedium::earth(64, 64)),
-            inner_radius: 60000.,
-            outer_radius: 700000.
-        }
-        RenderLayers::layer(0)
-        DespawnOnExit::<AppState>(AppState::InGame)
-    });
+    // commands.spawn_scene(bsn! {
+    //     #Sky
+    //     // Mesh3d(asset_value(Sphere::new(1000.).mesh().ico(7).unwrap().with_inverted_winding().unwrap()))
+    //     // MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
+    //     //     color: RED_100.into()
+    //     // }))
+    //     Atmosphere {
+    //         medium: asset_value(ScatteringMedium::earth(64, 64)),
+    //         inner_radius: 60000.,
+    //         outer_radius: 700000.
+    //     }
+    //     RenderLayers::layer(0)
+    //     DespawnOnExit::<AppState>(AppState::InGame)
+    // });
+    let skybox: Handle<Image> = asset_server.load("textures/skybox/skybox.ktx2");
+    let radience: Handle<Image> = asset_server.load("textures/skybox/pmrem.ktx2");
+    let irradiance: Handle<Image> = asset_server.load("textures/skybox/iem.ktx2");
 
     commands.spawn((
         Camera3d::default(),
@@ -520,13 +527,25 @@ fn light_and_cameras(
             ..default()
         }),
         (
-            AtmosphereSettings {
-                rendering_method: bevy::pbr::AtmosphereMode::LookupTexture,
+            Skybox {
+                image: Some(skybox),
+                brightness: 40.,
                 ..default()
             },
-            AtmosphereEnvironmentMapLight::default(),
-            Tonemapping::None,
-            Exposure::SUNLIGHT,
+            EnvironmentMapLight {
+                diffuse_map: irradiance,
+                specular_map: radience,
+                intensity: 5.,
+                ..default()
+            },
+            Bloom::NATURAL,
+            // AtmosphereSettings {
+            //     rendering_method: bevy::pbr::AtmosphereMode::LookupTexture,
+            //     ..default()
+            // },
+            // AtmosphereEnvironmentMapLight::default(),
+            Tonemapping::AgX,
+            Exposure { ev100: 8. },
             Msaa::Off,
             Smaa::default(),
         ),
