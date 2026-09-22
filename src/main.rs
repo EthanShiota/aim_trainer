@@ -546,7 +546,6 @@ fn light_and_cameras(
             //     rendering_method: bevy::pbr::AtmosphereMode::LookupTexture,
             //     ..default()
             // },
-            // AtmosphereEnvironmentMapLight::default(),
             Tonemapping::AgX,
             Exposure { ev100: 8. },
             Msaa::Off,
