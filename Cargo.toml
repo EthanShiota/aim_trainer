@@ -17,19 +17,14 @@ bevy = { version = "0.19.1", features = [
   "bevy_settings",
   "serialize",
   "jpeg",
-  "trace",
   "ktx2",
-  "trace_tracy",
 ] }
-bevy_egui = "0.40.0"
 bevy_skein = "0.6.0"
 bevy-inspector-egui = "0.37.0"
+bevy_egui = "0.40.0"
 rodio = { version = "0.22.2", features = ["playback"] }
 rfd = "0.17.2"
 
-# avian3d = "0.6.1"
-# bevy_rapier3d = "0.34.0"
-# bevy_skein = "0.5.0-rc.1"
 # Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.
 log = { version = "0.4", features = [
   "max_level_debug",
@@ -41,6 +36,11 @@ tracing = { version = "0.1", features = [
   "release_max_level_warn",
 ] }
 zip = "8.6.0"
+
+[features]
+# Enables tracing
+trace = ["bevy/trace", "bevy/trace_tracy"]
+
 
 # Idiomatic Bevy code often triggers these lints, and the CI workflow treats them as errors.
 # In some cases they may still signal poor code quality however, so consider commenting out these lines.
