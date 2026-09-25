@@ -34,7 +34,6 @@
     channel = "nightly";
     lsp.enable = true;
     mold.enable = true;
-    targets = ["x86_64-pc-windows-gnu"];
   };
 
   # https://devenv.sh/basics/
