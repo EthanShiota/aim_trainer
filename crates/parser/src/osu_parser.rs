@@ -149,7 +149,15 @@ pub struct General {
 #[derive(Clone)]
 pub struct Metadata {
     pub title: String,
+    pub title_unicode: String,
     pub version: String,
+    pub artist: String,
+    pub artist_unicode: String,
+    pub creator: String,
+    pub source: String,
+    pub tags: Vec<String>,
+    pub beatmap_id: i32,
+    pub beatmap_set_id: i32,
 }
 #[derive(Clone)]
 pub struct Difficulty {
@@ -305,9 +313,7 @@ fn parser<'a>(
         (header, values)
     });
 
-    pair(metadata, many1(context("section", section)))
-        .parse_complete(input)
-        .into()
+    pair(metadata, many1(context("section", section))).parse_complete(input)
 }
 
 impl BeatMapOsu {
@@ -338,7 +344,7 @@ impl BeatMapOsu {
         };
 
         let timing_points: Vec<_> = timing_points
-            .into_iter()
+            .iter()
             .map(|e| TimingPoint::try_from(e.as_slice()).unwrap())
             .collect();
 
@@ -355,6 +361,15 @@ impl BeatMapOsu {
             metadata: Metadata {
                 title: metadata["Title"].to_string(),
                 version: metadata["Version"].to_string(),
+                title_unicode: metadata["TitleUnicode"].to_string(),
+                artist: metadata["Artist"].to_string(),
+                artist_unicode: metadata["ArtistUnicode"].to_string(),
+                creator: metadata["Creator"].to_string(),
+                source: metadata["Source"].to_string(),
+                // Space seperated
+                tags: metadata["Tags"].split(' ').map(str::to_string).collect(),
+                beatmap_id: metadata["BeatmapID"].parse()?,
+                beatmap_set_id: metadata["BeatmapSetID"].parse()?,
             },
             difficulty: Difficulty {
                 hp_drain_rate: difficulty["HPDrainRate"].parse().unwrap(),
