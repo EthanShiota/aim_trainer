@@ -21,7 +21,7 @@ use bevy_egui::{egui::UiBuilder, prelude::*};
 use rfd::FileDialog;
 use zip::{ZipArchive, result::ZipError};
 
-use crate::{AppState, GameSettings, GameState, scenarios};
+use crate::{AppState, GameSettings, GameState, SoundSettings, scenarios};
 use parser::BeatMapOsu;
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
@@ -74,6 +74,7 @@ pub fn pause_menu() -> impl Scene {
 fn settings_window(
     mut contexts: EguiContexts,
     mut settings: If<ResMut<GameSettings>>,
+    mut sound_settings: If<ResMut<SoundSettings>>,
     mut confirm: Local<bool>,
     window: Single<&Window, With<PrimaryWindow>>,
     mut commands: Commands,
@@ -89,7 +90,13 @@ fn settings_window(
                 *confirm = false;
             }
         } else {
-            ui.add(egui::Slider::new(&mut settings.volume, 0.0..=1.0).text("Volume"));
+            ui.add(
+                egui::Slider::new(&mut sound_settings.music_volume, 0.0..=1.0).text("Music Volume"),
+            );
+            ui.add(
+                egui::Slider::new(&mut sound_settings.effects_volume, 0.0..=1.0)
+                    .text("Effects Volume"),
+            );
             ui.add(
                 egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0)
                     .text("Mouse Sensitivity"),

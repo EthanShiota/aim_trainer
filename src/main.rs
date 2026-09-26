@@ -28,6 +28,7 @@ use bevy::render::render_resource::{
     TextureViewDimension,
 };
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
+use bevy::world_serialization::WorldInstance;
 use bevy_egui::egui::Widget;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
@@ -55,7 +56,6 @@ use crate::target_plugin::{DebugMode, Marker, Target, TargetResource};
 #[reflect(Resource, SettingsGroup, Default)]
 #[settings_group(group = "general")]
 pub struct GameSettings {
-    pub volume: f32,
     // in / 360
     pub mouse_sensitivity: f32,
     pub dpi: usize,
@@ -65,15 +65,9 @@ pub struct GameSettings {
     pub mousebinds: HashMap<GameAction, Vec<MouseButton>>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Reflect)]
-pub enum GameAction {
-    FireWeapon,
-}
-
 impl Default for GameSettings {
     fn default() -> Self {
         Self {
-            volume: 1.0,
             mouse_sensitivity: 16.351,
             dpi: 800,
             fov: 1.0112001,
@@ -85,6 +79,28 @@ impl Default for GameSettings {
                 .collect(),
         }
     }
+}
+
+#[derive(Resource, Clone, SettingsGroup, Reflect)]
+#[reflect(Resource, SettingsGroup, Default)]
+#[settings_group(group = "volume")]
+pub struct SoundSettings {
+    pub music_volume: f32,
+    pub effects_volume: f32,
+}
+
+impl Default for SoundSettings {
+    fn default() -> Self {
+        Self {
+            music_volume: 1.0,
+            effects_volume: 1.0,
+        }
+    }
+}
+
+#[derive(Hash, Eq, PartialEq, Clone, Reflect)]
+pub enum GameAction {
+    FireWeapon,
 }
 
 #[derive(Resource, Deref)]
@@ -148,10 +164,7 @@ fn main() {
         .add_plugins(target_plugin::TargetPlugin)
         // INFO: Setup world when entering game
         // lights + camera + ui
-        .add_systems(
-            OnEnter(AppState::InGame),
-            (light_and_cameras, setup_ui).chain(),
-        )
+        .add_systems(OnEnter(AppState::InGame), (setup_ui, terrian))
         // INFO: Setup main menu
         // .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
         .add_systems(OnEnter(GameState::Paused), transition::pause)
@@ -177,6 +190,7 @@ fn main() {
         )
         // INFO: Sync settings to game systems
         .add_systems(OnExit(AppState::Menu), sync_game_settings)
+        .add_systems(Startup, light_and_cameras)
         .add_observer(on_sound_event)
         .run();
 }
@@ -455,11 +469,22 @@ impl Material for SkyMaterial {
     }
 }
 
+fn terrian(asset_server: ResMut<AssetServer>, mut commands: Commands) {
+    let gltf_scene: Handle<WorldAsset> =
+        asset_server.load(GltfAssetLabel::Scene(0).from_asset("terrain/terrian.glb"));
+    commands.spawn_scene(bsn! {
+        #Terrain
+        WorldAssetRoot(gltf_scene)
+        Transform {
+            scale: Vec3::splat(10.)
+        }
+        DespawnOnExit::<AppState>(AppState::InGame)
+    });
+}
 fn light_and_cameras(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
     asset_server: ResMut<AssetServer>,
-    mut images: ResMut<Assets<Image>>,
 ) {
     // commands.spawn((
     //     DirectionalLight {
@@ -486,16 +511,6 @@ fn light_and_cameras(
     //     }
     //     DespawnOnExit::<AppState>(AppState::InGame)
     // });
-    let gltf_scene: Handle<WorldAsset> =
-        asset_server.load(GltfAssetLabel::Scene(0).from_asset("terrain/terrian.glb"));
-    commands.spawn_scene(bsn! {
-        #Terrain
-        WorldAssetRoot(gltf_scene)
-        Transform {
-            scale: Vec3::splat(10.)
-        }
-        DespawnOnExit<AppState>(AppState::InGame)
-    });
 
     // commands.spawn_scene(bsn! {
     //     #Sky
@@ -554,16 +569,18 @@ fn light_and_cameras(
         Transform::from_xyz(0., 5., 0.),
         PlayerCamera,
         FPSCamera::default(),
-        DespawnOnExit(AppState::InGame),
+        DisableOnExit(AppState::InGame),
+        EnableOnEnter(AppState::InGame),
     ));
 
     commands.spawn((
         Name::new("UI Camera"),
-        DespawnOnExit(AppState::InGame),
         Camera2d,
         Msaa::Off,
         RenderLayers::layer(1),
         Projection::Orthographic(OrthographicProjection::default_2d()),
+        DisableOnExit(AppState::InGame),
+        EnableOnEnter(AppState::InGame),
         Camera {
             order: 1,
             output_mode: CameraOutputMode::Write {
@@ -618,6 +635,7 @@ fn toggle_fullscreen(
 /// Also saves to settings file
 fn sync_game_settings(
     settings: Res<GameSettings>,
+    sound_settings: Res<SoundSettings>,
     mut fps_config: ResMut<crate::fps_camera::FPSCameraConfig>,
     mut q_sink: Query<&mut AudioSink, With<AudioPlayer<AudioBuffer>>>,
     mut commands: Commands,
@@ -627,7 +645,7 @@ fn sync_game_settings(
     fps_config.sensitivity = new_sens.sensitivity;
 
     for mut sink in q_sink.iter_mut() {
-        sink.set_volume(bevy::audio::Volume::Linear(settings.volume));
+        sink.set_volume(bevy::audio::Volume::Linear(sound_settings.music_volume));
     }
     commands.queue(SaveSettingsSync::IfChanged);
 }
@@ -635,14 +653,11 @@ fn sync_game_settings(
 fn on_sound_event(
     e: On<CurveSoundEvent>,
     hovered: Query<(), (With<Hovered>, With<target_plugin::Active>)>,
+    sound_settings: Res<SoundSettings>,
     mut commands: Commands,
-    asset_server: ResMut<AssetServer>,
 ) {
     if hovered.contains(e.entity) {
-        commands.spawn((
-            AudioPlayer::new(asset_server.load("audio/Creams.ogg")),
-            PlaybackSettings::REMOVE,
-        ));
+        commands.spawn_scene(effects::hit_sound(sound_settings.effects_volume));
     }
     if e.last {
         commands.entity(e.entity).despawn();

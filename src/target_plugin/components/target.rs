@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use crate::AppState;
 use crate::scoreing::{Lifetime, Score};
 use crate::target_plugin::events::TargetDestroyed;
 use crate::target_plugin::events::TargetHit;
+use crate::{AppState, SoundSettings};
 use bevy::prelude::*;
 
 use crate::target_plugin::{TargetMaterial, TargetResource};
@@ -85,13 +85,13 @@ pub fn on_target_hit(
 pub fn on_target_destroyed(
     e: On<TargetDestroyed>,
     mut commands: Commands,
+    sound_settings: Res<SoundSettings>,
     q_transform: Query<&Transform>,
 ) {
     if let Ok(&t) = q_transform.get(e.event_target()) {
         commands.spawn_scene(bsn! {
-            AudioPlayer("audio/Creams.ogg")
+            crate::effects::hit_sound(sound_settings.effects_volume)
             template_value(t)
-            PlaybackSettings::REMOVE
             DespawnOnExit::<AppState>(AppState::InGame)
         });
     }

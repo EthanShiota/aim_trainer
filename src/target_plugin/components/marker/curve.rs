@@ -19,6 +19,7 @@ use bevy::{
 };
 use bevy_inspector_egui::egui::epaint::color;
 
+use crate::SoundSettings;
 use crate::target_plugin::components::beat_map::BeatMapResource;
 use crate::target_plugin::components::marker::curve::math_helpers::{circle, sample_circle};
 use crate::{
@@ -148,18 +149,19 @@ fn on_spawn_hint(
     let mesh = create_curve_mesh(mesh_curve);
     debug!("spawn hint");
     // TODO: Make the curve despawn when the animation is done
-    let hint = commands.spawn_scene(bsn! {
-        Name("Curve Path")
-        Mesh3d(asset_value(mesh))
-        // Transform {
-        //     translation: vec3(0.,0.,-50.)
-        // }
-        DespawnOnExit::<AppState>(AppState::InGame)
-        // MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
+    let hint = commands
+        .spawn_scene(bsn! {
+            Name("Curve Path")
+            Mesh3d(asset_value(mesh))
+            // Transform {
+            //     translation: vec3(0.,0.,-50.)
+            // }
+            DespawnOnExit::<AppState>(AppState::InGame)
+            // MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
 
-        MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
-        template_value(Lifetime::duration(preempt + Duration::from_secs_f32(curve_marker.duration)))
-    }).id();
+            MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
+        })
+        .id();
 
     // INFO: Spawns curve
     let mut clip = AnimationClip::default();
@@ -201,6 +203,7 @@ fn on_spawn_hint(
             template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
             template_value(player)
             AnimationGraphHandle(asset_value(animation_graph))
+            DespawnOnExit::<AppState>(AppState::InGame)
         })
         .observe(
             move |e: On<SpawnTarget>,
@@ -222,12 +225,11 @@ fn on_spawn_hint(
             },
         )
         .observe(
-            |e: On<TargetHit>, mut commands: Commands, asset_server: ResMut<AssetServer>| {
+            |e: On<TargetHit>, mut commands: Commands, sound_settings: Res<SoundSettings>| {
                 commands.entity(e.event_target()).trigger(SpawnTarget);
-                commands.entity(e.event_target()).insert((
-                    AudioPlayer::new(asset_server.load("audio/Creams.ogg")),
-                    PlaybackSettings::REMOVE,
-                ));
+                commands
+                    .entity(e.event_target())
+                    .apply_scene(crate::effects::hit_sound(sound_settings.effects_volume));
 
                 commands.entity(e.observer()).despawn();
             },
