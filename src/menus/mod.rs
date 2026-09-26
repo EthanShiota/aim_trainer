@@ -23,6 +23,8 @@ use zip::{ZipArchive, result::ZipError};
 
 use crate::{AppState, GameSettings, GameState, SoundSettings, scenarios};
 use parser::BeatMapOsu;
+
+mod components;
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -41,7 +43,13 @@ pub fn pause_menu() -> impl Scene {
         }
         DespawnOnExit::<GameState>(GameState::Paused)
         Children [
-            Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween, border: px(4.)}
+            Node {
+                 flex_direction: FlexDirection::Column width: percent(20.),
+                 height: percent(20.),
+                 align_items: AlignItems::Center,
+                 justify_content: JustifyContent::SpaceBetween,
+                 border: px(4.)
+            }
             BorderColor::all(css::BLACK)
             Children [
                 (
@@ -125,6 +133,8 @@ fn settings_window(
 fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
     egui_global_settings.auto_create_primary_context = false;
 
+    commands.insert_resource(components::theme());
+
     // Egui Camera
     commands.spawn((
         // The `PrimaryEguiContext` component requires everything needed to render a primary context.
@@ -153,6 +163,7 @@ fn main_menu(
     mut commands: Commands,
     mut beat_maps: Local<Vec<Vec<BeatMapOsu>>>,
     mut selected_file: Query<(&mut SelectedFile, Entity)>,
+    mut asset_server: ResMut<AssetServer>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     // ctx.global_style_mut(|style| {
@@ -188,6 +199,13 @@ fn main_menu(
             .clicked()
         {
             *beat_maps = serialize_beatmaps(beatmap_dir);
+            // let mut elements = vec![];
+            // for map in beat_maps.iter().flatten().step_by(3) {
+            //     elements.push(commands.spawn_scene(components::beatmap_version(map)).id());
+            // }
+            // commands
+            //     .spawn_scene(components::container())
+            //     .add_children(elements.as_slice());
         }
 
         for (mut file, entity) in selected_file.iter_mut() {

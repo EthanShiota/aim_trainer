@@ -133,6 +133,7 @@ fn main() {
                 })
                 .set(AssetPlugin {
                     watch_for_changes_override: Some(true),
+                    unapproved_path_mode: bevy::asset::UnapprovedPathMode::Deny,
                     ..default()
                 }),
             FPSCameraPlugin,

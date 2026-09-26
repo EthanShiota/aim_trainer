@@ -146,6 +146,15 @@ pub struct General {
     pub audio_lead_in: usize,
 }
 
+// #[derive(Clone)]
+// pub struct Events {
+//
+// }
+//
+// pub enum Event {
+//     Background()
+// }
+
 #[derive(Clone)]
 pub struct Metadata {
     pub title: String,
@@ -214,6 +223,7 @@ impl TryFrom<&[&str]> for TimingPoint {
 }
 #[derive(Clone)]
 pub struct BeatMapOsu {
+    // pub events: Events,
     pub beat_map_path: PathBuf,
     pub general: General,
     pub metadata: Metadata,
@@ -406,6 +416,25 @@ impl BeatMapOsu {
          / 30.0
             * 5.0)
             .round()
+    }
+
+    // HACK: Search beatmap folder for a image and use that as the background
+    pub fn background(&self) -> Option<PathBuf> {
+        for file in self.beat_map_path.parent()?.read_dir().ok()?.flatten() {
+            let file_path: PathBuf = file.path().iter().collect();
+            if !file_path.starts_with("osu_beatmaps") {
+                return None;
+            }
+
+            return match file.file_name().to_str() {
+                Some(s) => match s.split('.').next_back() {
+                    Some("jpg" | "png") => Some(std::env::current_dir().ok()?.join(file.path())),
+                    _ => continue,
+                },
+                None => continue,
+            };
+        }
+        None
     }
 }
 
