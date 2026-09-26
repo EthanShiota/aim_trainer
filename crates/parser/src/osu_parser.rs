@@ -237,7 +237,7 @@ enum OsuHeader {
 #[derive(Debug)]
 enum OsuValue<'a> {
     KV(HashMap<&'a str, &'a str>),
-    LIST(Vec<Vec<&'a str>>),
+    List(Vec<Vec<&'a str>>),
 }
 
 fn section_header(input: &str) -> IResult<&str, OsuHeader> {
@@ -306,7 +306,7 @@ fn parser<'a>(
             OsuHeader::Events | OsuHeader::TimingPoints | OsuHeader::HitObjects => {
                 many1(delimited(comment, list_value, comment))
                     .parse(body)
-                    .map(|(_, value)| OsuValue::LIST(value))
+                    .map(|(_, value)| OsuValue::List(value))
             }
         }
         .expect("section parser failed");
@@ -331,7 +331,7 @@ impl BeatMapOsu {
         let OsuValue::KV(metadata) = sections.get(&OsuHeader::Metadata).unwrap() else {
             unreachable!()
         };
-        let OsuValue::LIST(hitobj) = sections.get(&OsuHeader::HitObjects).unwrap() else {
+        let OsuValue::List(hitobj) = sections.get(&OsuHeader::HitObjects).unwrap() else {
             unreachable!()
         };
 
@@ -339,7 +339,7 @@ impl BeatMapOsu {
             unreachable!()
         };
 
-        let OsuValue::LIST(timing_points) = sections.get(&OsuHeader::TimingPoints).unwrap() else {
+        let OsuValue::List(timing_points) = sections.get(&OsuHeader::TimingPoints).unwrap() else {
             unreachable!()
         };
 
@@ -386,6 +386,28 @@ impl BeatMapOsu {
                 .collect(),
         })
     }
+
+    pub fn difficulty_multiplier(&self) -> f32 {
+        // TODO: Star rating
+        const PERFORMANCE_BASE_MULTIPLIER: f32 = 1.12; // This is being adjusted to keep the final pp value scaled around what it used to be when changing things.
+        const PERFORMANCE_NORM_EXPONENT: f32 = 1.1;
+
+        // Difficulty multiplier = Round((HP Drain + Circle Size + Overall Difficulty + Clamp(Hit object count / Drain time in seconds * 8, 0, 16)) / 38 * 5)
+        let Difficulty {
+            approach_rate,
+            hp_drain_rate,
+            circle_size,
+            overall_difficulty,
+            ..
+        } = self.difficulty;
+        let hit_object_count = self.hit_objects.len();
+        // TODO: Make sure this is correct
+        ((
+            hp_drain_rate + circle_size + overall_difficulty
+            // TODO: Drain per second (hit_object_count as f32 / (hp_drain_rate * 8.)).clamp(0., 16.)
+        ) / (38.0 * 5.0))
+            .round()
+    }
 }
 
 #[test]
@@ -410,7 +432,7 @@ fn nom_parser_test() {
                     println!("{} = {}", k, v);
                 }
             }
-            OsuValue::LIST(list) => {
+            OsuValue::List(list) => {
                 for item in list {
                     println!("{item:?}");
                 }
@@ -427,7 +449,7 @@ fn hit_object_test() {
     );
     let (_, (_metadata, res)) = parser(input).unwrap();
     let map: std::collections::HashMap<_, _> = res.into_iter().collect();
-    if let Some(OsuValue::LIST(list)) = map.get(&OsuHeader::HitObjects) {
+    if let Some(OsuValue::List(list)) = map.get(&OsuHeader::HitObjects) {
         let hit_objs: Vec<HitObject> = list
             .into_iter()
             .map(|s| s.as_slice().try_into().unwrap())

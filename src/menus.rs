@@ -16,7 +16,7 @@ use bevy::{
     tasks::{Task, futures::check_ready},
     window::PrimaryWindow,
 };
-use bevy_egui::egui::Ui;
+use bevy_egui::egui::{Ui, emath::Float};
 use bevy_egui::{egui::UiBuilder, prelude::*};
 use rfd::FileDialog;
 use zip::{ZipArchive, result::ZipError};
@@ -202,9 +202,11 @@ fn main_menu(
             }
         }
         // Beatmap select
-        for versions in beat_maps.iter() {
+        for versions in beat_maps.iter_mut() {
             if !versions.is_empty() {
                 egui::CollapsingHeader::new(&versions[0].metadata.title).show(ui, |ui| {
+                    // use hit_object count as proxy for difficulty
+                    versions.sort_by_key(|entry| entry.hit_objects.len());
                     for beat_map in versions.iter() {
                         let button = ui.button((beat_map.metadata.version).to_string());
                         if button.clicked() {
