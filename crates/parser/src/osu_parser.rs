@@ -400,12 +400,11 @@ impl BeatMapOsu {
             overall_difficulty,
             ..
         } = self.difficulty;
-        let hit_object_count = self.hit_objects.len();
+        // let hit_object_count = self.hit_objects.len();
         // TODO: Make sure this is correct
-        ((
-            hp_drain_rate + circle_size + overall_difficulty
-            // TODO: Drain per second (hit_object_count as f32 / (hp_drain_rate * 8.)).clamp(0., 16.)
-        ) / (38.0 * 5.0))
+        ((hp_drain_rate + circle_size + overall_difficulty) // TODO: Drain per second (hit_object_count as f32 / (hp_drain_rate * 8.)).clamp(0., 16.)
+         / 30.0
+            * 5.0)
             .round()
     }
 }

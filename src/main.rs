@@ -8,11 +8,7 @@ mod scenarios;
 mod scoreing;
 mod target_plugin;
 
-use bevy::anti_alias::contrast_adaptive_sharpening::ContrastAdaptiveSharpening;
-use bevy::anti_alias::fxaa::Fxaa;
 use bevy::anti_alias::smaa::{Smaa, SmaaPreset};
-use bevy::anti_alias::taa::TemporalAntiAliasing;
-use bevy::asset::RenderAssetUsages;
 use bevy::audio::AddAudioSource;
 use bevy::camera::Projection::Perspective;
 use bevy::camera::{CameraOutputMode, Exposure};
@@ -49,6 +45,7 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::input::InputMessage;
+use crate::scoreing::Score;
 use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
 use crate::target_plugin::{DebugMode, Marker, Target, TargetResource};
 
@@ -367,6 +364,7 @@ fn game_loop(
 fn debug_window(
     mut contexts: EguiContexts,
     target_resource: Option<ResMut<TargetResource>>,
+    score: Option<Res<Score>>,
 ) -> Result {
     if let Some(mut target_resource) = target_resource {
         egui::Window::new("Target Resource").show(contexts.ctx_mut()?, |ui| {
@@ -384,6 +382,12 @@ fn debug_window(
             egui::Slider::new(ring_end, 0.0..=3.0)
                 .text("Ring End")
                 .ui(ui);
+        });
+    }
+
+    if let Some(score) = score {
+        egui::Window::new("score").show(contexts.ctx_mut()?, |ui| {
+            ui.label(format!("points: {}", score.points));
         });
     }
     Ok(())

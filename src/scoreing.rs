@@ -1,14 +1,48 @@
 use std::time::Duration;
 
 use bevy::{color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection};
+use parser::Difficulty;
 
 use crate::AppState;
 pub struct ScoringPlugin;
 
 #[derive(Resource, Default)]
 pub struct Score {
-    pub points: usize,
+    pub points: f64,
     pub overall_difficulty: f32,
+    pub difficulty_multiplier: f32,
+    combo: usize,
+}
+
+impl Score {
+    pub fn new(points: f64, overall_difficulty: f32, difficulty_multiplier: f32) -> Self {
+        Self {
+            points,
+            overall_difficulty,
+            difficulty_multiplier,
+            combo: 0,
+        }
+    }
+
+    pub fn score_hit(&mut self, lifetime: &Lifetime) -> f32 {
+        // Score = Hit value * (1 + (Combo multiplier * Difficulty multiplier * Mod multiplier / 25))
+        // TODO: Mod Multiplier
+        let mod_multiplier = 1.;
+
+        self.combo += 1;
+        debug!("combo: {}", self.combo);
+        let hit_value = lifetime.judge_hit(self.overall_difficulty) as f32;
+        if hit_value == 0.0 {
+            self.combo = 0;
+        }
+        hit_value
+            * (1.
+                + (
+                    self.combo.saturating_sub(2) as f32 * dbg!(self.difficulty_multiplier)
+                    // * mod_multiplier
+                    // / 25.
+                ))
+    }
 }
 
 // Marker for score display
@@ -68,7 +102,6 @@ fn tick(
 }
 
 fn setup(mut commands: Commands) {
-    commands.insert_resource(Score::default());
     commands.spawn_scene(bsn! {
         Node {
             display: Display::Flex,

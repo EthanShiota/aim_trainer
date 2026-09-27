@@ -61,7 +61,8 @@ pub fn on_target_hit(
             Target::Counter(count) => {
                 *count -= 1;
                 if let Ok(lifetime) = q_lifetime.get(e.event_target()) {
-                    let points = lifetime.judge_hit(score.overall_difficulty);
+                    let points = score.score_hit(lifetime) as f64;
+                    debug!("{points:?}");
                     score.points += points;
                 }
                 *count == 0

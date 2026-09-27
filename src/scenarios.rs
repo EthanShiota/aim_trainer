@@ -151,7 +151,7 @@ pub fn osu(
         target_curves,
         ..
     } = osu_beat_map.hit_objects.iter().fold(
-        BeatMapDecoderState::new(osu_beat_map.timing_points),
+        BeatMapDecoderState::new(osu_beat_map.timing_points.clone()),
         |mut state, hit_obj| {
             let t = hit_obj.time;
 
@@ -255,10 +255,11 @@ pub fn osu(
     debug!("leadin: {:?}", leadin);
     let resource = beat_map.spawn(commands.reborrow());
     commands.insert_resource(resource);
-    commands.insert_resource(Score {
-        points: 0,
-        overall_difficulty: osu_beat_map.difficulty.overall_difficulty,
-    });
+    commands.insert_resource(Score::new(
+        0.0,
+        osu_beat_map.difficulty.overall_difficulty,
+        osu_beat_map.difficulty_multiplier(),
+    ));
 }
 
 fn create_curve_marker(
