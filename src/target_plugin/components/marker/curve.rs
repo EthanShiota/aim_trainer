@@ -17,7 +17,6 @@ use bevy::{
     math::curve,
     prelude::*,
 };
-use bevy_inspector_egui::egui::epaint::color;
 
 use crate::SoundSettings;
 use crate::target_plugin::components::beat_map::BeatMapResource;

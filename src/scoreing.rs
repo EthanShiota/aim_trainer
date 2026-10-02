@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use bevy::{color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection};
-use parser::Difficulty;
 
 use crate::AppState;
 pub struct ScoringPlugin;
@@ -38,7 +37,7 @@ impl Score {
         hit_value
             * (1.
                 + (
-                    self.combo.saturating_sub(2) as f32 * dbg!(self.difficulty_multiplier)
+                    self.combo.saturating_sub(2) as f32 * self.difficulty_multiplier
                     // * mod_multiplier
                     // / 25.
                 ))

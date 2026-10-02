@@ -1,4 +1,4 @@
-#![recursion_limit = "256"]
+mod crosshair;
 mod edit_mode;
 mod effects;
 mod fps_camera;
@@ -8,23 +8,17 @@ mod scenarios;
 mod scoreing;
 mod target_plugin;
 
-use bevy::anti_alias::smaa::{Smaa, SmaaPreset};
+use bevy::anti_alias::smaa::Smaa;
 use bevy::audio::AddAudioSource;
+use bevy::camera::Exposure;
 use bevy::camera::Projection::Perspective;
-use bevy::camera::{CameraOutputMode, Exposure};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::dev_tools::diagnostics_overlay::{DiagnosticsOverlay, DiagnosticsOverlayPlugin};
-use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use bevy::light::cluster::{ClusterConfig, GlobalClusterSettings};
-use bevy::pbr::{AtmosphereSettings, ScreenSpaceReflections};
+use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
-use bevy::render::render_resource::{
-    AsBindGroup, BlendState, Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor,
-    TextureViewDimension,
-};
+use bevy::render::render_resource::AsBindGroup;
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
-use bevy::world_serialization::WorldInstance;
 use bevy_egui::egui::Widget;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
@@ -32,22 +26,19 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::camera::visibility::RenderLayers;
-use bevy::light::atmosphere::ScatteringMedium;
-use bevy::light::light_consts::lux;
-use bevy::light::{
-    Atmosphere, AtmosphereEnvironmentMapLight, Skybox, VolumetricFog, VolumetricLight,
-};
+use bevy::light::Skybox;
 use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
 
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
+use crate::crosshair::CrosshairMaterial;
 use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
 use crate::input::InputMessage;
 use crate::scoreing::Score;
 use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
-use crate::target_plugin::{DebugMode, Marker, Target, TargetResource};
+use crate::target_plugin::{Marker, Target, TargetResource};
 
 #[derive(Resource, Clone, SettingsGroup, Reflect)]
 #[reflect(Resource, SettingsGroup, Default)]
@@ -91,6 +82,21 @@ impl Default for SoundSettings {
         Self {
             music_volume: 1.0,
             effects_volume: 1.0,
+        }
+    }
+}
+
+#[derive(Resource, Clone, SettingsGroup, Reflect)]
+#[reflect(Resource, SettingsGroup, Default)]
+#[settings_group(group = "crosshair")]
+pub struct CrosshairSettings {
+    crosshair: CrosshairMaterial,
+}
+
+impl Default for CrosshairSettings {
+    fn default() -> Self {
+        Self {
+            crosshair: default(),
         }
     }
 }
@@ -151,6 +157,7 @@ fn main() {
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()
         .add_plugins(MaterialPlugin::<SkyMaterial>::default())
+        .add_plugins(UiMaterialPlugin::<CrosshairMaterial>::default())
         // INFO: State
         .insert_state(AppState::Menu)
         .add_sub_state::<GameState>()
@@ -219,101 +226,6 @@ enum EditMode {
 #[derive(Component, Default, Clone)]
 struct PlayerCamera;
 
-// fn main_menu() -> impl Scene {
-//     bsn! {
-//         DespawnOnExit::<AppState>(AppState::Menu)
-//         Camera2d
-//         Node {
-//             width: percent(100.),
-//             height: percent(100.),
-//             display: Display::Flex,
-//             align_content: AlignContent::Center,
-//             align_items: AlignItems::Center,
-//             justify_content: JustifyContent::Center,
-//             flex_direction: FlexDirection::Column,
-//         }
-//         BackgroundColor(RED_100)
-//         Children [
-//             (
-//                 menu_button("Play")
-//                 on(|_e: On<Pointer<Press>>, _commands: Commands, _path: Option<Res<BeatMapPath>>| {
-//                     // let f = FileDialog::default().set_directory("/").pick_file().unwrap();
-//                     // commands.insert_resource(BeatMapPath(f));
-//                     // commands.set_state(AppState::InGame);
-//                     // commands.run_system_cached(scenarios::osu);
-//                 })
-//             ),
-//             (
-//                 menu_button("Exit")
-//             )
-//
-//         ]
-//     }
-// }
-//
-// fn menu_button(text: &'static str) -> impl Scene {
-//     bsn! {
-//         Node {
-//             min_width: px(200.),
-//             min_height: px(100.),
-//             width: percent(40.),
-//             height: percent(20.),
-//             align_content: AlignContent::Center,
-//             align_items: AlignItems::Center,
-//             justify_content: JustifyContent::Center,
-//             display: Display::Flex,
-//             margin: px(30.),
-//             border: px(4.)
-//         }
-//         BorderColor::all(FUCHSIA_300)
-//         // on(|e: On<Pointer<Press>>, mut commands: Commands|{
-//         //     commands.entity(e.entity).insert(BackgroundColor(GREEN_300.into()));
-//         // })
-//         // on(|e: On<Pointer<Release>>, mut commands: Commands|{
-//         //     commands.entity(e.entity).insert(BackgroundColor(VIOLET_500.into()));
-//         // })
-//         Button
-//         BackgroundColor(VIOLET_500)
-//         Children [
-//             Text(text)
-//         ]
-//     }
-// }
-//
-// fn music_controls(
-//     mut contexts: EguiContexts,
-//     mut q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
-//     sources: Res<Assets<AudioBuffer>>,
-//     mut should_resume: Local<bool>,
-//     mut stopwatch: ResMut<SceneTimer>,
-// ) -> Result {
-//     egui::Window::new("Controls").show(contexts.ctx_mut()?, |ui| {
-//         for (sink, audio_player) in q_sink.iter_mut() {
-//             let mut value = sink.position().as_secs_f64();
-//             let max = sources
-//                 .get(&audio_player.0)
-//                 .unwrap()
-//                 .total_duration()
-//                 .unwrap();
-//             let slider = ui.add(egui::Slider::new(&mut value, 0.0..=max.as_secs_f64()));
-//             if slider.changed() {
-//                 _ = sink
-//                     .try_seek(Duration::from_secs_f64(value))
-//                     .inspect_err(|err| println!("{err:?}"));
-//                 stopwatch.set_elapsed(sink.position());
-//             }
-//             if slider.drag_started() {
-//                 *should_resume = !sink.is_paused();
-//                 sink.pause();
-//             }
-//             if slider.drag_stopped() && *should_resume {
-//                 sink.play();
-//             }
-//         }
-//     });
-//     Ok(())
-// }
-
 fn playing_binds(
     mut commands: Commands,
     time: Res<Time<Virtual>>,
@@ -334,10 +246,18 @@ fn playing_binds(
     }
 }
 
-fn global_bindings(key_input: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+fn global_bindings(
+    key_input: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    mut ui_debug: ResMut<GlobalUiDebugOptions>,
+) {
     // Global
     if key_input.just_pressed(KeyCode::KeyF) {
         commands.run_system_cached(toggle_fullscreen);
+    }
+
+    if key_input.just_pressed(KeyCode::Equal) {
+        ui_debug.enabled.toggle();
     }
 }
 
@@ -394,6 +314,7 @@ fn debug_window(
     Ok(())
 }
 pub mod transition {
+
     use super::*;
 
     pub(crate) fn play(
@@ -424,19 +345,23 @@ pub mod transition {
     }
 }
 
+#[derive(Resource)]
+pub struct Crosshair(pub Handle<CrosshairMaterial>);
+
 fn setup_ui(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut meterials: ResMut<Assets<ColorMaterial>>,
+    mut crosshair_materials: ResMut<Assets<CrosshairMaterial>>,
+    crosshair_settings: Res<CrosshairSettings>,
 ) -> Result {
-    // Spawn crosshair
-    commands.spawn((
-        Mesh2d(meshes.add(Circle::new(3.))),
-        MeshMaterial2d(meterials.add(Color::WHITE)),
-        Transform::default(),
-        RenderLayers::layer(1),
-        DespawnOnExit(AppState::InGame),
-    ));
+    let crosshair = crosshair_materials.add(crosshair_settings.crosshair.clone());
+    commands.spawn_scene(bsn! {
+        MaterialNode<CrosshairMaterial>({crosshair.clone()})
+        Node {
+            width: percent(100.),
+            height: percent(100.)
+        }
+    });
+    commands.insert_resource(Crosshair(crosshair));
 
     commands.spawn((
         DiagnosticsOverlay {
@@ -491,46 +416,6 @@ fn light_and_cameras(
     game_settings: Res<GameSettings>,
     asset_server: ResMut<AssetServer>,
 ) {
-    // commands.spawn((
-    //     DirectionalLight {
-    //         shadow_maps_enabled: false,
-    //         affects_lightmapped_mesh_diffuse: false,
-    //         // lux::RAW_SUNLIGHT is recommended for use with this feature, since
-    //         // other values approximate sunlight *post-scattering* in various
-    //         // conditions. RAW_SUNLIGHT in comparison is the illuminance of the
-    //         // sun unfiltered by the atmosphere, so it is the proper input for
-    //         // sunlight to be filtered by the atmosphere.
-    //         illuminance: lux::RAW_SUNLIGHT,
-    //         ..default()
-    //     },
-    //     Transform::from_xyz(1.0, 0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
-    //     DespawnOnExit(AppState::InGame),
-    // ));
-
-    // commands.spawn_scene(bsn! {
-    //     #ORB
-    //     Mesh3d(asset_value(primitives::Cylinder::new(100.,1.).mesh()))
-    //     MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
-    //     Transform {
-    //         translation: vec3(0., -80., 0.),
-    //     }
-    //     DespawnOnExit::<AppState>(AppState::InGame)
-    // });
-
-    // commands.spawn_scene(bsn! {
-    //     #Sky
-    //     // Mesh3d(asset_value(Sphere::new(1000.).mesh().ico(7).unwrap().with_inverted_winding().unwrap()))
-    //     // MeshMaterial3d::<SkyMaterial>(asset_value(SkyMaterial {
-    //     //     color: RED_100.into()
-    //     // }))
-    //     Atmosphere {
-    //         medium: asset_value(ScatteringMedium::earth(64, 64)),
-    //         inner_radius: 60000.,
-    //         outer_radius: 700000.
-    //     }
-    //     RenderLayers::layer(0)
-    //     DespawnOnExit::<AppState>(AppState::InGame)
-    // });
     let skybox: Handle<Image> =
         asset_server.load("textures/skybox/NightSky008/NightSkyHDRI008_8K_HDR_skybox.ktx2");
     let diffuse: Handle<Image> =
@@ -562,10 +447,6 @@ fn light_and_cameras(
                 ..default()
             },
             Bloom::NATURAL,
-            // AtmosphereSettings {
-            //     rendering_method: bevy::pbr::AtmosphereMode::LookupTexture,
-            //     ..default()
-            // },
             Tonemapping::AgX,
             Exposure { ev100: 8. },
             Msaa::Off,
@@ -576,25 +457,6 @@ fn light_and_cameras(
         FPSCamera::default(),
         DisableOnExit(AppState::InGame),
         EnableOnEnter(AppState::InGame),
-    ));
-
-    commands.spawn((
-        Name::new("UI Camera"),
-        Camera2d,
-        Msaa::Off,
-        RenderLayers::layer(1),
-        Projection::Orthographic(OrthographicProjection::default_2d()),
-        DisableOnExit(AppState::InGame),
-        EnableOnEnter(AppState::InGame),
-        Camera {
-            order: 1,
-            output_mode: CameraOutputMode::Write {
-                blend_state: Some(BlendState::ALPHA_BLENDING),
-                clear_color: ClearColorConfig::None,
-            },
-            clear_color: ClearColorConfig::Custom(Color::NONE),
-            ..default()
-        },
     ));
 }
 

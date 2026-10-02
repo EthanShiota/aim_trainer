@@ -33,7 +33,6 @@
     enable = true;
     channel = "nightly";
     lsp.enable = true;
-    mold.enable = true;
   };
 
   # https://devenv.sh/basics/

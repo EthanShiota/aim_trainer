@@ -8,12 +8,16 @@ use std::{
 
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
-    color::palettes::css,
+    color::palettes::css::{self, BLACK, WHITE},
+    feathers::{FeathersCorePlugin, font_styles, theme},
+    input::common_conditions::input_just_pressed,
+    input_focus::{AutoFocus, InputFocus},
     math::AspectRatio,
     prelude::*,
     render::render_resource::BlendState,
     settings::SaveSettings,
     tasks::{Task, futures::check_ready},
+    text::{EditableText, TextCursorStyle, TextEdit},
     window::PrimaryWindow,
 };
 use bevy_egui::egui::{Ui, emath::Float};
@@ -21,7 +25,11 @@ use bevy_egui::{egui::UiBuilder, prelude::*};
 use rfd::FileDialog;
 use zip::{ZipArchive, result::ZipError};
 
-use crate::{AppState, GameSettings, GameState, SoundSettings, scenarios};
+use crate::{
+    AppState, GameSettings, GameState, SoundSettings, menus::components::container, scenarios,
+};
+
+use components::crosshair_settings;
 use parser::BeatMapOsu;
 
 mod components;
@@ -32,7 +40,20 @@ impl Plugin for MenuPlugin {
             EguiPrimaryContextPass,
             (main_menu, settings_window).run_if(in_state(AppState::Menu)),
         )
-        .add_systems(Startup, setup);
+        .add_systems(Startup, setup)
+        .add_plugins(FeathersCorePlugin)
+        .add_systems(
+            Update,
+            settings_item_submit.run_if(input_just_pressed(KeyCode::Enter)),
+        );
+    }
+}
+
+fn settings_item_submit(mut focus: ResMut<InputFocus>, settings_item: Query<&EditableText>) {
+    if let Some(focus_ent) = focus.get()
+        && settings_item.contains(focus_ent)
+    {
+        focus.clear();
     }
 }
 
@@ -43,6 +64,7 @@ pub fn pause_menu() -> impl Scene {
         }
         DespawnOnExit::<GameState>(GameState::Paused)
         Children [
+            crosshair_settings(),
             Node {
                  flex_direction: FlexDirection::Column width: percent(20.),
                  height: percent(20.),
@@ -50,6 +72,7 @@ pub fn pause_menu() -> impl Scene {
                  justify_content: JustifyContent::SpaceBetween,
                  border: px(4.)
             }
+            Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween, border: px(4.)}
             BorderColor::all(css::BLACK)
             Children [
                 (
@@ -73,7 +96,7 @@ pub fn pause_menu() -> impl Scene {
                         Node {justify_content: JustifyContent::Center}
                         Text::new("Main Menu")
                     ]
-                )
+                ),
             ]
         ]
     }

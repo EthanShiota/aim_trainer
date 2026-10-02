@@ -118,8 +118,8 @@ fn update_raycast(
     }
 }
 
-fn remove_hovered(mut commands: Commands, mut q_hovered: Query<Entity, With<Hovered>>) {
-    for hovered in q_hovered.iter() {
+fn remove_hovered(mut commands: Commands, q_hovered: Query<Entity, With<Hovered>>) {
+    for hovered in q_hovered.into_iter() {
         commands.entity(hovered).remove::<Hovered>();
     }
 }

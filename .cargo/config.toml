@@ -65,7 +65,7 @@
 # For more information, see the blog post at <https://blog.rust-lang.org/2023/11/09/parallel-rustc.html>.
 
 [target.x86_64-unknown-linux-gnu]
-linker = "gcc"
+linker = "mold"
 rustflags = [
   # LLD linker
   #
@@ -83,11 +83,11 @@ rustflags = [
   # - Ubuntu: `sudo apt-get install mold clang`
   # - Fedora: `sudo dnf install mold clang`
   # - Arch: `sudo pacman -S mold clang`
-  "-Clink-arg=-fuse-ld=mold",
+  # "-Clink-arg=-fuse-ld=mold",
 
   # Nightly
   "-Zshare-generics=y",
-  "-Zthreads=0",
+  "-Zthreads=8",
   "-Zcache-proc-macros",
 ]
 
