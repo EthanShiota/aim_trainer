@@ -12,8 +12,6 @@ use bevy::{
     window::{CursorOptions, PrimaryWindow},
 };
 
-use crate::target_plugin::Target;
-
 #[derive(Resource, Reflect)]
 pub struct FPSCameraConfig {
     pub sensitivity: f32,
@@ -48,13 +46,11 @@ pub struct FPSCamera {
     pub yaw: f32,
 }
 
-use super::target_plugin::TargetSchedule;
 pub struct FPSCameraPlugin;
 impl Plugin for FPSCameraPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(FPSCameraConfig::default())
-            .add_systems(PreUpdate, (update, update_raycast).chain())
-            .add_systems(PostUpdate, remove_hovered.after(AnimationSystems));
+            .add_systems(Update, update);
     }
 }
 fn setup(mut q_player_transform: Query<(&Transform, &mut FPSCamera)>) {
@@ -87,39 +83,5 @@ fn update(
             .clamp(-PI / 2., PI / 2.);
         state.yaw -= (mouse_motion.delta.x * config.sensitivity * RADIANS_PER_DOT);
         transform.rotation = Quat::from_euler(EulerRot::ZYX, 0.0, state.yaw, state.pitch);
-    }
-}
-
-#[derive(Component, Deref)]
-pub struct Hovered(pub usize);
-fn update_raycast(
-    mut ray_cast: MeshRayCast,
-    q_cam: Query<&Transform, With<FPSCamera>>,
-    q_target: Query<&Target>,
-    mut commands: Commands,
-) {
-    for cam in q_cam.iter() {
-        // Cast hovered ray from fps camera look direction
-        let ray = Ray3d::new(cam.translation, cam.forward());
-
-        // Filter out non target meshes
-        let filter = |entity| q_target.contains(entity);
-        let mut settings = MeshRayCastSettings::default()
-            .with_filter(&filter)
-            .with_visibility(Visible);
-
-        let results = ray_cast.cast_ray(ray, &settings);
-
-        for (idx, (entity, _hit)) in results.iter().enumerate() {
-            // Hovered idx is likely non-deterministic as targets can be at identical distances from the camera
-            // or it is incorrect way of ordering hit priority
-            commands.entity(*entity).insert(Hovered(idx));
-        }
-    }
-}
-
-fn remove_hovered(mut commands: Commands, q_hovered: Query<Entity, With<Hovered>>) {
-    for hovered in q_hovered.into_iter() {
-        commands.entity(hovered).remove::<Hovered>();
     }
 }

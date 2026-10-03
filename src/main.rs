@@ -1,7 +1,6 @@
 mod crosshair;
 mod edit_mode;
 mod effects;
-mod fps_camera;
 mod input;
 mod menus;
 mod scenarios;
@@ -18,6 +17,7 @@ use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
 use bevy::render::render_resource::AsBindGroup;
+use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy_egui::egui::Widget;
 use rodio::buffer::SamplesBuffer;
@@ -34,11 +34,11 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 
 use crate::crosshair::CrosshairMaterial;
-use crate::fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse, Hovered};
-use crate::input::InputMessage;
+use crate::input::{Hovered, InputMessage};
 use crate::scoreing::Score;
 use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
 use crate::target_plugin::{Marker, Target, TargetResource};
+use fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 
 #[derive(Resource, Clone, SettingsGroup, Reflect)]
 #[reflect(Resource, SettingsGroup, Default)]
@@ -174,10 +174,7 @@ fn main() {
         // .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
         .add_systems(OnEnter(GameState::Paused), transition::pause)
         .add_systems(OnEnter(GameState::Playing), transition::play)
-        .add_systems(
-            Update,
-            (bevy::ui::widget::update_viewport_render_target_size,),
-        )
+        .add_systems(Update, bevy::ui::widget::update_viewport_render_target_size)
         // INFO: Game Logic loops
         .add_systems(
             Update,
@@ -503,12 +500,11 @@ fn toggle_fullscreen(
 fn sync_game_settings(
     settings: Res<GameSettings>,
     sound_settings: Res<SoundSettings>,
-    mut fps_config: ResMut<crate::fps_camera::FPSCameraConfig>,
+    mut fps_config: ResMut<fps_camera::FPSCameraConfig>,
     mut q_sink: Query<&mut AudioSink, With<AudioPlayer<AudioBuffer>>>,
     mut commands: Commands,
 ) {
-    let new_sens =
-        crate::fps_camera::FPSCameraConfig::with_sens(settings.mouse_sensitivity, settings.dpi);
+    let new_sens = fps_camera::FPSCameraConfig::with_sens(settings.mouse_sensitivity, settings.dpi);
     fps_config.sensitivity = new_sens.sensitivity;
 
     for mut sink in q_sink.iter_mut() {
@@ -527,6 +523,6 @@ fn on_sound_event(
         commands.spawn_scene(effects::hit_sound(sound_settings.effects_volume));
     }
     if e.last {
-        commands.entity(e.entity).despawn();
+        commands.entity(e.entity).try_despawn();
     }
 }

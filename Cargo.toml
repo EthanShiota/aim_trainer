@@ -1,10 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["crates/parser"]
+
 [package]
 name = "aim-game"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
-parser = { path = "./crates/parser" }
+[workspace.dependencies]
 bevy = { version = "0.19.1", features = [
   "multi_threaded",
   "mesh_picking",
@@ -19,9 +23,15 @@ bevy = { version = "0.19.1", features = [
   "ktx2",
   "bevy_feathers",
 ] }
+bevy_egui = "0.42.0"
+
+[dependencies]
+parser = { path = "./crates/parser" }
+fps_camera = { path = "./crates/fps_camera" }
+bevy = { workspace = true }
 # bevy_skein = "0.6.0"
 # bevy-inspector-egui = "0.37.0"
-bevy_egui = "0.42.0"
+bevy_egui = { workspace = true }
 rodio = { version = "0.22.2", features = ["playback"] }
 rfd = "0.17.2"
 

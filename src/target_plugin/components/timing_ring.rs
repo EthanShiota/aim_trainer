@@ -1,8 +1,9 @@
 // Timing Ring
 // Ring which always faces the camera and shrinks over time
 
-use crate::{GameState, fps_camera::FPSCamera};
+use crate::GameState;
 use bevy::{color::palettes::css::WHITE_SMOKE, prelude::*, render::render_resource::AsBindGroup};
+use fps_camera::FPSCamera;
 
 pub struct TimingRingPlugin;
 

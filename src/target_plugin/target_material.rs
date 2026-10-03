@@ -7,7 +7,7 @@ use bevy::{
     render::render_resource::AsBindGroup,
 };
 
-use crate::{fps_camera::Hovered, target_plugin::Target};
+use crate::{input::Hovered, target_plugin::Target};
 
 #[derive(AsBindGroup, Debug, Clone, Asset, Component, Reflect)]
 pub struct TargetMaterial {

@@ -4,7 +4,7 @@ use crate::{
 };
 use bevy::prelude::*;
 
-use super::fps_camera::Hovered;
+use super::input::Hovered;
 pub struct EffectPlugin;
 
 pub fn hit_sound(effects_volume: f32) -> impl Scene {
