@@ -1,5 +1,5 @@
 use crate::GameAction;
-use crate::target_plugin::Target;
+use crate::target::Target;
 use fps_camera::FPSCamera;
 
 use super::GameSettings;
@@ -59,7 +59,7 @@ fn update_raycast(
 
         // Filter out non target meshes
         let filter = |entity| q_target.contains(entity);
-        let mut settings = MeshRayCastSettings::default()
+        let settings = MeshRayCastSettings::default()
             .with_filter(&filter)
             .with_visibility(Visible);
 

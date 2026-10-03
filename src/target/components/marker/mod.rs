@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     AppState, AudioBuffer,
-    target_plugin::{
+    target::{
         components::beat_map::BeatMapResource,
         events::{SpawnHint, SpawnTarget},
     },

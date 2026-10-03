@@ -5,7 +5,7 @@ mod input;
 mod menus;
 mod scenarios;
 mod scoreing;
-mod target_plugin;
+mod target;
 
 use bevy::anti_alias::smaa::Smaa;
 use bevy::audio::AddAudioSource;
@@ -16,8 +16,6 @@ use bevy::dev_tools::diagnostics_overlay::{DiagnosticsOverlay, DiagnosticsOverla
 use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
-use bevy::render::render_resource::AsBindGroup;
-use bevy::render::{RenderDebugFlags, RenderPlugin};
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy_egui::egui::Widget;
 use rodio::buffer::SamplesBuffer;
@@ -36,8 +34,8 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 use crate::crosshair::CrosshairMaterial;
 use crate::input::{Hovered, InputMessage};
 use crate::scoreing::Score;
-use crate::target_plugin::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
-use crate::target_plugin::{Marker, Target, TargetResource};
+use crate::target::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
+use crate::target::{Marker, Target, TargetResource};
 use fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 
 #[derive(Resource, Clone, SettingsGroup, Reflect)]
@@ -156,7 +154,6 @@ fn main() {
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()
-        .add_plugins(MaterialPlugin::<SkyMaterial>::default())
         .add_plugins(UiMaterialPlugin::<CrosshairMaterial>::default())
         // INFO: State
         .insert_state(AppState::Menu)
@@ -166,7 +163,7 @@ fn main() {
         .insert_resource(Assets::<AudioBuffer>::default())
         .add_audio_source::<AudioBuffer>()
         // INFO: Target plugin
-        .add_plugins(target_plugin::TargetPlugin)
+        .add_plugins(target::TargetPlugin)
         // INFO: Setup world when entering game
         // lights + camera + ui
         .add_systems(OnEnter(AppState::InGame), (setup_ui, terrian))
@@ -187,13 +184,13 @@ fn main() {
         // INFO: Egui context systems
         .add_systems(
             EguiPrimaryContextPass,
-            (debug_window.run_if(resource_equals(target_plugin::DebugMode(true))))
+            (debug_window.run_if(resource_equals(target::DebugMode(true))))
                 .run_if(in_state(AppState::InGame)),
         )
         // INFO: Sync settings to game systems
         .add_systems(OnExit(AppState::Menu), sync_game_settings)
         .add_systems(Startup, light_and_cameras)
-        .add_observer(on_sound_event)
+        .add_observer(effects::on_sound_event)
         .run();
 }
 
@@ -226,7 +223,7 @@ struct PlayerCamera;
 fn playing_binds(
     mut commands: Commands,
     time: Res<Time<Virtual>>,
-    mut q_curve: Query<(Entity, &mut Target), (With<Hovered>, With<target_plugin::Active>)>,
+    mut q_curve: Query<(Entity, &mut Target), (With<Hovered>, With<target::Active>)>,
     q_point: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
     mut reader: PopulatedMessageReader<InputMessage>,
 ) {
@@ -238,6 +235,32 @@ fn playing_binds(
             InputMessage::FireWeapon => fire_weapon(q_point, &mut commands),
             InputMessage::FireWeaponHeld => {
                 fire_weapon_held(time.delta(), &mut q_curve, &mut commands)
+            }
+        }
+    }
+}
+
+fn fire_weapon(
+    q_hit: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
+    commands: &mut Commands,
+) {
+    let mut hits: Vec<_> = q_hit.into_iter().collect();
+    hits.sort_by_key(|elm| elm.1);
+    if let Some((t, _)) = hits.first() {
+        commands.entity(*t).trigger(TargetHit);
+    }
+}
+
+fn fire_weapon_held(
+    delta: Duration,
+    q_hit: &mut Query<(Entity, &mut Target), (With<Hovered>, With<target::Active>)>,
+    commands: &mut Commands,
+) {
+    for (entity, mut target) in q_hit.iter_mut() {
+        if let Target::Duration(dur) = target.as_mut() {
+            *dur = dur.saturating_sub(delta);
+            if dur.is_zero() {
+                commands.entity(entity).trigger(TargetDestroyed);
             }
         }
     }
@@ -261,7 +284,7 @@ fn global_bindings(
 fn game_loop(
     mut commands: Commands,
     key_input: Res<ButtonInput<KeyCode>>,
-    mut debug_mode: ResMut<target_plugin::DebugMode>,
+    mut debug_mode: ResMut<target::DebugMode>,
     game_state: Res<State<GameState>>,
 ) {
     let game_state = game_state.get();
@@ -384,18 +407,6 @@ impl Decodable for AudioBuffer {
     }
 }
 
-#[derive(AsBindGroup, Debug, Clone, Asset, Reflect)]
-pub struct SkyMaterial {
-    #[uniform(0)]
-    pub color: LinearRgba,
-}
-
-impl Material for SkyMaterial {
-    fn fragment_shader() -> bevy::shader::ShaderRef {
-        "shaders/SkyMaterial.wgsl".into()
-    }
-}
-
 fn terrian(asset_server: ResMut<AssetServer>, mut commands: Commands) {
     let gltf_scene: Handle<WorldAsset> =
         asset_server.load(GltfAssetLabel::Scene(0).from_asset("terrain/terrian.glb"));
@@ -457,32 +468,6 @@ fn light_and_cameras(
     ));
 }
 
-fn fire_weapon(
-    q_hit: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
-    commands: &mut Commands,
-) {
-    let mut hits: Vec<_> = q_hit.into_iter().collect();
-    hits.sort_by_key(|elm| elm.1);
-    if let Some((t, _)) = hits.first() {
-        commands.entity(*t).trigger(TargetHit);
-    }
-}
-
-fn fire_weapon_held(
-    delta: Duration,
-    q_hit: &mut Query<(Entity, &mut Target), (With<Hovered>, With<target_plugin::Active>)>,
-    commands: &mut Commands,
-) {
-    for (entity, mut target) in q_hit.iter_mut() {
-        if let Target::Duration(dur) = target.as_mut() {
-            *dur = dur.saturating_sub(delta);
-            if dur.is_zero() {
-                commands.entity(entity).trigger(TargetDestroyed);
-            }
-        }
-    }
-}
-
 fn toggle_fullscreen(
     mut window: Single<&mut Window, With<PrimaryWindow>>,
     mut maximized: Local<bool>,
@@ -511,18 +496,4 @@ fn sync_game_settings(
         sink.set_volume(bevy::audio::Volume::Linear(sound_settings.music_volume));
     }
     commands.queue(SaveSettingsSync::IfChanged);
-}
-
-fn on_sound_event(
-    e: On<CurveSoundEvent>,
-    hovered: Query<(), (With<Hovered>, With<target_plugin::Active>)>,
-    sound_settings: Res<SoundSettings>,
-    mut commands: Commands,
-) {
-    if hovered.contains(e.entity) {
-        commands.spawn_scene(effects::hit_sound(sound_settings.effects_volume));
-    }
-    if e.last {
-        commands.entity(e.entity).try_despawn();
-    }
 }

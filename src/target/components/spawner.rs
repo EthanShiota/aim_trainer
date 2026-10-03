@@ -1,4 +1,4 @@
-use crate::target_plugin::{TargetMaterial, TargetResource};
+use crate::target::{TargetMaterial, TargetResource};
 use std::time::Duration;
 
 use bevy::{

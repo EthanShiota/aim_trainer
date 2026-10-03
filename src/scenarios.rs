@@ -23,7 +23,7 @@ use std::{
 use crate::{
     AudioBuffer, EditMode,
     scoreing::Score,
-    target_plugin::{self, BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
+    target::{self, BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
 };
 use parser::{BeatMapOsu, Point, SliderParams, TimingPoint};
 

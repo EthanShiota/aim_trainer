@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use bevy::{color::palettes::tailwind::GREEN_300, prelude::*};
 
-use crate::{AppState, target_plugin::TargetMaterial};
+use crate::{AppState, target::TargetMaterial};
 #[derive(Resource)]
 pub struct TargetResource {
     // base target mesh

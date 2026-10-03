@@ -1,7 +1,7 @@
 use bevy::{color::palettes::tailwind::RED_800, prelude::*};
 use std::time::Duration;
 
-use crate::target_plugin::{
+use crate::target::{
     Target, TargetMaterial, TargetResource, components::target, events::SpawnHint,
 };
 use crate::{AppState, scoreing::Lifetime};

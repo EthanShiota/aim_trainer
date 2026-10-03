@@ -1,6 +1,6 @@
 use crate::{
-    AppState,
-    target_plugin::{Marker, TargetMaterial},
+    AppState, SoundSettings, effects,
+    target::{self, Marker, TargetMaterial, events::CurveSoundEvent},
 };
 use bevy::prelude::*;
 
@@ -15,5 +15,19 @@ pub fn hit_sound(effects_volume: f32) -> impl Scene {
             mode: bevy::audio::PlaybackMode::Remove
         }
         DespawnOnExit::<AppState>(AppState::InGame)
+    }
+}
+
+pub fn on_sound_event(
+    e: On<CurveSoundEvent>,
+    hovered: Query<(), (With<Hovered>, With<target::Active>)>,
+    sound_settings: Res<SoundSettings>,
+    mut commands: Commands,
+) {
+    if hovered.contains(e.entity) {
+        commands.spawn_scene(effects::hit_sound(sound_settings.effects_volume));
+    }
+    if e.last {
+        commands.entity(e.entity).try_despawn();
     }
 }

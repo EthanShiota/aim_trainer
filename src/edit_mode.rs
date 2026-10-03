@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::prelude::*;
 
-use crate::{AudioBuffer, EditMode, target_plugin::Target};
+use crate::{AudioBuffer, EditMode, target::Target};
 
 pub struct EditPlugin;
 impl Plugin for EditPlugin {

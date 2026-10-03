@@ -19,12 +19,12 @@ use bevy::{
 };
 
 use crate::SoundSettings;
-use crate::target_plugin::components::beat_map::BeatMapResource;
-use crate::target_plugin::components::marker::curve::math_helpers::{circle, sample_circle};
+use crate::target::components::beat_map::BeatMapResource;
+use crate::target::components::marker::curve::math_helpers::{circle, sample_circle};
 use crate::{
     AppState, GameState,
     scoreing::Lifetime,
-    target_plugin::{
+    target::{
         DebugMode, Target, TargetResource,
         events::{CurveSoundEvent, SpawnHint, SpawnTarget, TargetHit},
         target::FadeIn,

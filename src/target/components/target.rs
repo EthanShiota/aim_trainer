@@ -1,12 +1,12 @@
 use std::time::Duration;
 
 use crate::scoreing::{Lifetime, Score};
-use crate::target_plugin::events::TargetDestroyed;
-use crate::target_plugin::events::TargetHit;
+use crate::target::events::TargetDestroyed;
+use crate::target::events::TargetHit;
 use crate::{AppState, SoundSettings};
 use bevy::prelude::*;
 
-use crate::target_plugin::{TargetMaterial, TargetResource};
+use crate::target::{TargetMaterial, TargetResource};
 
 // Marker component for targets
 #[derive(Component, Copy, Clone)]

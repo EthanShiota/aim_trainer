@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     AppState, AudioBuffer,
-    target_plugin::{CurveMarker, Marker, TargetMarker},
+    target::{CurveMarker, Marker, TargetMarker},
 };
 
 pub struct BeatMap {
