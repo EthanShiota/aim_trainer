@@ -20,7 +20,6 @@ use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, Sett
 use bevy_egui::egui::Widget;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
-use std::path::PathBuf;
 use std::time::Duration;
 
 use bevy::camera::visibility::RenderLayers;
@@ -34,7 +33,7 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
 use crate::crosshair::CrosshairMaterial;
 use crate::input::{Hovered, InputMessage};
 use crate::scoreing::Score;
-use crate::target::events::{CurveSoundEvent, TargetDestroyed, TargetHit};
+use crate::target::events::{TargetDestroyed, TargetHit};
 use crate::target::{Marker, Target, TargetResource};
 use fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 
@@ -104,9 +103,6 @@ pub enum GameAction {
     FireWeapon,
 }
 
-#[derive(Resource, Deref)]
-pub struct BeatMapPath(PathBuf);
-
 fn main() {
     App::new()
         .insert_resource(GrabMouse(true))
@@ -141,7 +137,6 @@ fn main() {
                     ..default()
                 }),
             FPSCameraPlugin,
-            // SkeinPlugin::default(),
             FrameTimeDiagnosticsPlugin::default(),
             DiagnosticsOverlayPlugin,
             EguiPlugin::default(),
@@ -149,8 +144,6 @@ fn main() {
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
             input::GameInputPlugin,
-            // bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
-            // WorldInspectorPlugin::default().run_if(resource_equals(DebugMode(true))),
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()
