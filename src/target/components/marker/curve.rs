@@ -284,9 +284,7 @@ fn on_spawn_hint(
             move |mut e: On<LifetimeEvent>, mut commands: Commands, mut score: ResMut<Score>| {
                 debug_span!("curve_lifetime").in_scope(|| {
                     score.score_hit(0);
-                    commands.entity(e.0).despawn();
                     commands.entity(hint).despawn();
-                    commands.entity(e.observer()).despawn();
                 });
             },
         )
