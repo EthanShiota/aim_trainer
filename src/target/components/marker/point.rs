@@ -1,6 +1,7 @@
 use bevy::{color::palettes::tailwind::RED_800, prelude::*};
 use std::time::Duration;
 
+use crate::scoreing::{LifetimeEvent, Score};
 use crate::target::{
     Target, TargetMaterial, TargetResource, components::target, events::SpawnHint,
 };
@@ -33,14 +34,24 @@ pub fn on_spawn_hint(
     let miss_duration = Duration::from_millis(400);
 
     // Spawn Target
-    let _target = commands.entity(entity).apply_scene(bsn! {
-        target::FadeIn({Timer::new(preempt,TimerMode::Once)})
-        {target_resource.target_scene()}
-        // Mesh3d({target_resource.mesh.clone()})
-        // MeshMaterial3d::<TargetMaterial>(asset_value(mat))
-        template_value(*spawn_location)
-        DespawnOnExit::<AppState>(AppState::InGame)
-        template_value(Target::Counter(1))
-        Lifetime::duration(preempt + miss_duration)
-    });
+    let _target = commands
+        .entity(entity)
+        .apply_scene(bsn! {
+            target::FadeIn({Timer::new(preempt,TimerMode::Once)})
+            {target_resource.target_scene()}
+            // Mesh3d({target_resource.mesh.clone()})
+            // MeshMaterial3d::<TargetMaterial>(asset_value(mat))
+            template_value(*spawn_location)
+            DespawnOnExit::<AppState>(AppState::InGame)
+            template_value(Target::Counter(1))
+            Lifetime::duration(preempt + miss_duration)
+        })
+        .observe(
+            |e: On<LifetimeEvent>, mut commands: Commands, mut score: ResMut<Score>| {
+                debug_span!(target: "lifetime", "point").in_scope(|| {
+                    score.score_hit(0);
+                    commands.entity(e.event_target()).despawn();
+                });
+            },
+        );
 }

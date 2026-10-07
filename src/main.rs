@@ -21,6 +21,7 @@ use bevy_egui::egui::Widget;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
 use std::time::Duration;
+use tracing::instrument;
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::light::Skybox;
@@ -144,6 +145,7 @@ fn main() {
             menus::MenuPlugin,
             scoreing::ScoringPlugin,
             input::GameInputPlugin,
+            effects::EffectPlugin,
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()
@@ -183,7 +185,6 @@ fn main() {
         // INFO: Sync settings to game systems
         .add_systems(OnExit(AppState::Menu), sync_game_settings)
         .add_systems(Startup, light_and_cameras)
-        .add_observer(effects::on_sound_event)
         .run();
 }
 
@@ -233,12 +234,14 @@ fn playing_binds(
     }
 }
 
+#[instrument(skip_all)]
 fn fire_weapon(
     q_hit: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
     commands: &mut Commands,
 ) {
     let mut hits: Vec<_> = q_hit.into_iter().collect();
     hits.sort_by_key(|elm| elm.1);
+    debug!(hits = ?hits);
     if let Some((t, _)) = hits.first() {
         commands.entity(*t).trigger(TargetHit);
     }

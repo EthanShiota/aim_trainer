@@ -93,7 +93,7 @@ pub fn tick(
             commands.entity(entity).trigger(SpawnHint);
         }
         if (beat_map.scene_timer..=sink.position()).contains(&marker.spawn_time) {
-            commands.entity(entity).trigger(SpawnTarget);
+            // commands.entity(entity).trigger(SpawnTarget);
         }
     }
     beat_map.scene_timer = sink.position();

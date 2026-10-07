@@ -19,6 +19,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+use tracing::{Level, event};
 
 use crate::{
     AudioBuffer, EditMode,
@@ -153,6 +154,8 @@ pub fn osu(
     } = osu_beat_map.hit_objects.iter().fold(
         BeatMapDecoderState::new(osu_beat_map.timing_points.clone()),
         |mut state, hit_obj| {
+            let span = debug_span!("HitObject: {}", hit_obj.time);
+            let guard = span.enter();
             let t = hit_obj.time;
 
             while t > (state.previous_timing_point as usize)
@@ -165,7 +168,11 @@ pub fn osu(
                 } else {
                     // slider velocity
                     state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
-                    debug!("{t} {:#?}", state.slider_velocity);
+                    event!(
+                        Level::DEBUG,
+                        time = t,
+                        slider_velocity = state.slider_velocity
+                    );
                 }
                 state.previous_timing_point = next_timing_point.time;
                 state.timing_point_iter.next();
@@ -201,17 +208,17 @@ pub fn osu(
                     .collect();
 
                 let slider_multiplier = osu_beat_map.difficulty.slider_multiplier;
-                // INFO: milliseconds it takes to complete one slide of the slider
+                // INFO: seconds it takes to complete one slide of the slider
                 let curve_duration = (((length
                     / (slider_multiplier * 100. * state.slider_velocity))
                     * state.beat_length)
                     / 1000.);
 
-                debug!(
-                    "{t} -> {:?} @ {}",
-                    curve_duration * 1000.,
-                    t as f32 + curve_duration * 1000.
-                );
+                debug!("curve duration" = curve_duration);
+
+                let num_beats = (curve_duration * 1000.) / state.beat_length;
+                let curve_ticks = num_beats * osu_beat_map.difficulty.slider_tick_rate;
+                debug!("num beats" = num_beats, "curve ticks" = curve_ticks);
 
                 state.target_curves.push(create_curve_marker(
                     &curve_type,
@@ -221,6 +228,7 @@ pub fn osu(
                     preempt_ms as u64,
                     t as u64,
                     slides,
+                    curve_ticks,
                     length,
                 ));
             } else {
@@ -270,10 +278,11 @@ fn create_curve_marker(
     preempt_ms: u64,
     t: u64,
     slides: usize,
+    num_ticks: f32,
     // Length in osu px
     length: f32,
 ) -> (CurveMarker, Marker) {
-    match curve_type {
+    let curve_marker = match curve_type {
         parser::CurveType::Bezier => {
             let curve = loop_curve(
                 points_to_bezier(points)
@@ -284,27 +293,23 @@ fn create_curve_marker(
                 curve_duration,
             );
 
-            (
-                CurveMarker {
-                    curve,
-                    duration: curve_duration * slides as f32,
-                    slides,
-                },
-                Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
-            )
+            CurveMarker {
+                curve,
+                duration: curve_duration * slides as f32,
+                num_ticks,
+                slides,
+            }
         }
         parser::CurveType::CentripetalCatmullRom => todo!(),
         parser::CurveType::Linear => {
             let curve = linear_curve(points, curve_duration, slides);
 
-            (
-                CurveMarker {
-                    curve,
-                    slides,
-                    duration: curve_duration * slides as f32,
-                },
-                Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
-            )
+            CurveMarker {
+                curve,
+                slides,
+                num_ticks,
+                duration: curve_duration * slides as f32,
+            }
         }
         parser::CurveType::PerfectCircle => {
             if points.len() != 3 {
@@ -344,16 +349,18 @@ fn create_curve_marker(
 
             let curve = loop_curve(unlooped_curve, slides, curve_duration);
 
-            (
-                CurveMarker {
-                    slides,
-                    curve,
-                    duration: curve_duration * slides as f32,
-                },
-                Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
-            )
+            CurveMarker {
+                slides,
+                curve,
+                num_ticks,
+                duration: curve_duration * slides as f32,
+            }
         }
-    }
+    };
+    (
+        curve_marker,
+        Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
+    )
 }
 
 fn get_audio_file_path(osu_beat_map: &BeatMapOsu) -> PathBuf {

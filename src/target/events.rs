@@ -12,9 +12,17 @@ pub struct SpawnTarget(pub Entity);
 #[derive(EntityEvent)]
 pub struct SpawnHint(pub Entity);
 
-/// Triggered at the start, end, and when changing direction
 #[derive(AnimationEvent, Clone)]
-pub struct CurveSoundEvent {
-    pub entity: Entity,
-    pub last: bool,
-}
+pub struct SliderTick(pub Entity);
+
+#[derive(AnimationEvent, Clone)]
+pub struct SliderHead(pub Entity);
+
+#[derive(AnimationEvent, Clone)]
+pub struct SliderTail(pub Entity);
+
+#[derive(AnimationEvent, Clone)]
+pub struct SliderRepeat(pub Entity);
+
+#[derive(EntityEvent)]
+pub struct RemoveCurve(pub Entity);

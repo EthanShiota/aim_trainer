@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use bevy::{color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection};
+use tracing::instrument;
 
-use crate::AppState;
+use crate::{AppState, target::events::TargetHit};
 pub struct ScoringPlugin;
 
 #[derive(Resource, Default)]
@@ -10,7 +11,23 @@ pub struct Score {
     pub points: f64,
     pub overall_difficulty: f32,
     pub difficulty_multiplier: f32,
-    combo: usize,
+    pub hit_counts: HitCounts,
+    pub combo: usize,
+}
+
+#[derive(Default)]
+pub struct HitCounts {
+    n300: u32,
+    n100: u32,
+    n50: u32,
+    miss: u32,
+}
+
+impl HitCounts {
+    fn accuarcy(&self) -> f64 {
+        (300 * self.n300 + 100 * self.n100 + 50 * self.n50) as f64
+            / (300 * (self.n300 + self.n100 + self.n50 + self.miss)) as f64
+    }
 }
 
 impl Score {
@@ -20,27 +37,43 @@ impl Score {
             overall_difficulty,
             difficulty_multiplier,
             combo: 0,
+            hit_counts: default(),
         }
     }
 
-    pub fn score_hit(&mut self, lifetime: &Lifetime) -> f32 {
-        // Score = Hit value * (1 + (Combo multiplier * Difficulty multiplier * Mod multiplier / 25))
-        // TODO: Mod Multiplier
-        let mod_multiplier = 1.;
+    #[instrument(skip(self))]
+    pub fn score_hit(&mut self, value: usize) -> f32 {
+        match value {
+            0 => self.hit_counts.miss += 1,
+            50 => self.hit_counts.n50 += 1,
+            100 => self.hit_counts.n100 += 1,
+            300 => self.hit_counts.n300 += 1,
+            _ => (),
+        }
 
-        self.combo += 1;
-        debug!("combo: {}", self.combo);
-        let hit_value = lifetime.judge_hit(self.overall_difficulty) as f32;
-        if hit_value == 0.0 {
+        if value == 0 {
             self.combo = 0;
         }
-        hit_value
+        debug!(value);
+        value as f32
             * (1.
                 + (
                     self.combo.saturating_sub(2) as f32 * self.difficulty_multiplier
                     // * mod_multiplier
                     // / 25.
                 ))
+    }
+
+    #[instrument(skip_all)]
+    pub fn score_lifetime(&mut self, lifetime: &Lifetime) -> f32 {
+        // Score = Hit value * (1 + (Combo multiplier * Difficulty multiplier * Mod multiplier / 25))
+        // TODO: Mod Multiplier
+        let mod_multiplier = 1.;
+
+        self.combo += 1;
+        debug!("combo: {}", self.combo);
+        let hit_value = lifetime.judge_hit(self.overall_difficulty);
+        self.score_hit(hit_value)
     }
 }
 
@@ -57,7 +90,35 @@ impl Plugin for ScoringPlugin {
 }
 
 #[derive(Component, Clone, Default)]
+pub struct SliderScorer {
+    pub hits: u32,
+    pub total: u32,
+}
+
+impl SliderScorer {
+    pub fn score(&mut self) -> usize {
+        let span = debug_span!("score");
+        let _guard = span.enter();
+        let proportion = self.hits as f64 / self.total as f64;
+        debug!(proportion = proportion);
+        match proportion {
+            // GREAT 	100%
+            prop if prop >= 1. => 300,
+            // OK 	50%
+            prop if prop >= 0.5 => 100,
+            // MEH 	At least one slider part
+            prop if prop > 0. => 50,
+            // MISS 	0%
+            _ => 0,
+        }
+    }
+}
+
+#[derive(Component, Clone, Default)]
 pub struct Lifetime(Timer);
+
+#[derive(EntityEvent, Clone, Copy)]
+pub struct LifetimeEvent(pub Entity);
 
 impl Lifetime {
     pub fn duration(duration: Duration) -> Self {
@@ -68,6 +129,7 @@ impl Lifetime {
         self.0.remaining()
     }
 
+    #[instrument(skip(self))]
     pub fn judge_hit(&self, overall_difficulty: f32) -> usize {
         let od = overall_difficulty;
         match self.hit_error() as f32 {
@@ -95,7 +157,7 @@ fn tick(
         lifetime.0.tick(time.delta());
         if lifetime.0.is_finished() {
             // TODO: Calculate score
-            commands.entity(ent).try_despawn();
+            commands.entity(ent).trigger(LifetimeEvent);
         }
     }
 }
@@ -123,6 +185,10 @@ fn setup(mut commands: Commands) {
 
 fn update_score(score: If<Res<Score>>, mut q_display: Query<&mut Text, With<ScoreDisplay>>) {
     if let Ok(mut text) = q_display.single_mut() {
-        *text.get_text_mut() = format!("Score {}", score.points);
+        *text.get_text_mut() = format!(
+            "Score {} -> Accuarcy {}",
+            score.points,
+            score.hit_counts.accuarcy()
+        );
     }
 }

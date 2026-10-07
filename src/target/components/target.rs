@@ -5,6 +5,7 @@ use crate::target::events::TargetDestroyed;
 use crate::target::events::TargetHit;
 use crate::{AppState, SoundSettings};
 use bevy::prelude::*;
+use tracing::instrument;
 
 use crate::target::{TargetMaterial, TargetResource};
 
@@ -13,6 +14,7 @@ use crate::target::{TargetMaterial, TargetResource};
 pub enum Target {
     Counter(usize),
     Duration(Duration),
+    Marker,
 }
 
 #[derive(Component, Default, Clone)]
@@ -61,9 +63,11 @@ pub fn on_target_hit(
             Target::Counter(count) => {
                 *count -= 1;
                 if let Ok(lifetime) = q_lifetime.get(e.event_target()) {
-                    let points = score.score_hit(lifetime) as f64;
-                    debug!("{points:?}");
-                    score.points += points;
+                    debug_span!("target_hit").in_scope(|| {
+                        let points = score.score_lifetime(lifetime) as f64;
+                        debug!(points = points);
+                        score.points += points;
+                    });
                 }
                 *count == 0
             }
@@ -74,6 +78,7 @@ pub fn on_target_hit(
                 // TODO: Handle; linked to curve and scoring
                 false
             }
+            Target::Marker => false,
         };
 
         // Destroy target
@@ -83,6 +88,7 @@ pub fn on_target_hit(
     }
 }
 
+#[instrument(skip(e, commands, sound_settings, q_transform))]
 pub fn on_target_destroyed(
     e: On<TargetDestroyed>,
     mut commands: Commands,

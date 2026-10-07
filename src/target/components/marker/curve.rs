@@ -7,6 +7,7 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::render::render_resource::AsBindGroup;
 use bevy_egui::egui::color_picker::show_color;
+use tracing::{Instrument, instrument};
 
 use std::{f32, ops::Range, time::Duration};
 
@@ -19,15 +20,14 @@ use bevy::{
 };
 
 use crate::SoundSettings;
+use crate::scoreing::{LifetimeEvent, Score, SliderScorer};
 use crate::target::components::beat_map::BeatMapResource;
 use crate::target::components::marker::curve::math_helpers::{circle, sample_circle};
 use crate::{
     AppState, GameState,
     scoreing::Lifetime,
     target::{
-        DebugMode, Target, TargetResource,
-        events::{CurveSoundEvent, SpawnHint, SpawnTarget, TargetHit},
-        target::FadeIn,
+        DebugMode, Target, TargetResource, events::*, target::FadeIn,
         target_material::TargetMaterial,
     },
 };
@@ -68,6 +68,7 @@ impl Material for CurveMarkerMaterial {
 #[require(super::Marker)]
 pub struct CurveMarker {
     pub curve: bevy::math::curve::SampleAutoCurve<Vec3>,
+    pub num_ticks: f32,
     pub slides: usize,
     // duration of curve
     pub duration: f32,
@@ -117,6 +118,7 @@ fn curve_marker_gizmos(
     }
 }
 
+#[instrument(skip_all)]
 fn on_spawn_hint(
     e: On<SpawnHint>,
     q_curve_marker: Query<(Entity, &super::Marker, &mut CurveMarker)>,
@@ -146,7 +148,6 @@ fn on_spawn_hint(
         |f| f,
     );
     let mesh = create_curve_mesh(mesh_curve);
-    debug!("spawn hint");
     // TODO: Make the curve despawn when the animation is done
     let hint = commands
         .spawn_scene(bsn! {
@@ -173,15 +174,32 @@ fn on_spawn_hint(
     clip.add_curve_to_target(anim_id, curve);
     clip.set_duration(curve_marker.duration);
 
-    // INFO: add sound events
     let segment_duration = curve_marker.duration / curve_marker.slides as f32;
-    for slide in 1..=curve_marker.slides {
-        let last = slide == curve_marker.slides;
+
+    // INFO: Add slider events
+
+    // SliderHead
+    clip.add_event_to_target(anim_id, 0.0, SliderHead(entity));
+
+    // SliderRepeat
+    for slide in 1..curve_marker.slides {
         clip.add_event_to_target(
             anim_id,
             segment_duration * slide as f32,
-            CurveSoundEvent { entity, last },
+            SliderRepeat(entity),
         );
+    }
+
+    // SliderTail
+    clip.add_event_to_target(anim_id, clip.duration(), SliderTail(entity));
+
+    // SliderTick
+    let total = curve_marker.num_ticks.round() as u32 + 2 + (curve_marker.slides as u32 - 1);
+
+    let tick_interval = clip.duration() / curve_marker.num_ticks;
+
+    for t in (1..=total).map(|i| i as f32 * tick_interval) {
+        clip.add_event_to_target(anim_id, t, SliderTick(entity));
     }
 
     let (animation_graph, animation_node_index) =
@@ -191,6 +209,7 @@ fn on_spawn_hint(
 
     let anim_duration = Duration::from_secs_f32(curve_marker.duration);
     let end_time = time.elapsed() + preempt + anim_duration;
+    // total ticks
     let mut slider = commands
         .entity(entity)
         .apply_scene(bsn! {
@@ -199,7 +218,8 @@ fn on_spawn_hint(
                 translation: {curve_marker.curve.sample_unchecked(0.)}
             }
             FadeIn({Timer::new(preempt, TimerMode::Once)})
-            template_value(Target::Duration(Duration::from_secs_f32(curve_marker.duration)))
+            template_value(Lifetime::duration(preempt + Duration::from_millis(400)))
+            template_value(Target::Marker)
             template_value(player)
             AnimationGraphHandle(asset_value(animation_graph))
             DespawnOnExit::<AppState>(AppState::InGame)
@@ -209,30 +229,70 @@ fn on_spawn_hint(
                   mut q_player: Query<&mut AnimationPlayer>,
                   mut commands: Commands,
                   time: Res<Time<Virtual>>| {
+                // commands
+                //     .entity(hint)
+                //     .insert(Lifetime::duration(anim_duration));
+                commands
+                    .entity(e.event_target())
+                    .insert(Target::Marker)
+                    // .insert(Lifetime::duration(anim_duration))
+                    .insert(SliderScorer { total, hits: 0 });
+
                 if let Ok(mut p) = q_player.get_mut(e.event_target()) {
                     p.start(animation_node_index);
                 }
-                commands
-                    .entity(hint)
-                    .insert(Lifetime::duration(anim_duration));
-                commands
-                    .entity(e.event_target())
-                    .insert(Target::Duration(anim_duration))
-                    .insert(Lifetime::duration(anim_duration));
 
                 commands.entity(e.observer()).despawn();
             },
         )
         .observe(
-            |e: On<TargetHit>, mut commands: Commands, sound_settings: Res<SoundSettings>| {
-                commands.entity(e.event_target()).trigger(SpawnTarget);
-                commands
-                    .entity(e.event_target())
-                    .apply_scene(crate::effects::hit_sound(sound_settings.effects_volume));
+            move |e: On<TargetHit>,
+                  mut commands: Commands,
+                  sound_settings: Res<SoundSettings>,
+                  mut score: ResMut<Score>,
+                  lifetime: Query<&Lifetime>| {
+                debug_span!("Curve Target Hit").in_scope(|| {
+                    debug!(target = ?e.0);
+                    if let Ok(lifetime) = lifetime.get(e.event_target()) {
+                        match lifetime.judge_hit(score.overall_difficulty) {
+                            50.. => {
+                                // Valid hit
+                            }
+                            info => {
+                                debug!("Miss with: {info}");
+                                score.score_hit(0);
+                                // TODO: Indicate miss
+                                commands.entity(hint).despawn();
+                                return;
+                            }
+                        }
+                    }
 
-                commands.entity(e.observer()).despawn();
+                    commands.entity(e.event_target()).trigger(SpawnTarget);
+                    commands.entity(e.event_target()).remove::<Lifetime>();
+                    commands.entity(e.event_target()).remove::<Target>();
+
+                    // span.in_scope(|| {
+                    //     commands.spawn_scene(crate::effects::hit_sound(sound_settings.effects_volume));
+                    // });
+
+                    commands.entity(e.observer()).despawn();
+                });
             },
         )
+        .observe(
+            move |mut e: On<LifetimeEvent>, mut commands: Commands, mut score: ResMut<Score>| {
+                debug_span!("curve_lifetime").in_scope(|| {
+                    score.score_hit(0);
+                    commands.entity(e.0).despawn();
+                    commands.entity(hint).despawn();
+                    commands.entity(e.observer()).despawn();
+                });
+            },
+        )
+        .observe(move |e: On<RemoveCurve>, mut commands: Commands| {
+            commands.entity(hint).despawn();
+        })
         .id();
 
     commands
@@ -496,7 +556,7 @@ fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
             .map(|val| val as u32)
             .collect::<Vec<u32>>(),
     ));
-    debug!(
+    trace!(
         "Generated mesh in {:?}",
         std::time::Instant::now().duration_since(now)
     );

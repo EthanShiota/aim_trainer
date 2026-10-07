@@ -1,5 +1,5 @@
-use crate::GameAction;
 use crate::target::Target;
+use crate::{GameAction, GameState};
 use fps_camera::FPSCamera;
 
 use super::GameSettings;
@@ -17,8 +17,14 @@ pub struct GameInputPlugin;
 impl Plugin for GameInputPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<InputMessage>()
-            .add_systems(PreUpdate, handle_fire_input)
-            .add_systems(PreUpdate, update_raycast)
+            .add_systems(
+                PreUpdate,
+                handle_fire_input.run_if(in_state(GameState::Playing)),
+            )
+            .add_systems(
+                PreUpdate,
+                update_raycast.run_if(in_state(GameState::Playing)),
+            )
             .add_systems(PostUpdate, remove_hovered.after(AnimationSystems));
     }
 }
