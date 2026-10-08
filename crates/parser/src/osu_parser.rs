@@ -165,8 +165,8 @@ pub struct Metadata {
     pub creator: String,
     pub source: String,
     pub tags: Vec<String>,
-    pub beatmap_id: i32,
-    pub beatmap_set_id: i32,
+    pub beatmap_id: Option<i32>,
+    pub beatmap_set_id: Option<i32>,
 }
 #[derive(Clone)]
 pub struct Difficulty {
@@ -371,15 +371,23 @@ impl BeatMapOsu {
             metadata: Metadata {
                 title: metadata["Title"].to_string(),
                 version: metadata["Version"].to_string(),
-                title_unicode: metadata["TitleUnicode"].to_string(),
+                title_unicode: metadata
+                    .get("TitleUnicode")
+                    .or_else(|| metadata.get("Title"))
+                    .unwrap()
+                    .to_string(),
                 artist: metadata["Artist"].to_string(),
-                artist_unicode: metadata["ArtistUnicode"].to_string(),
+                artist_unicode: metadata
+                    .get("ArtistUnicode")
+                    .or_else(|| metadata.get("Artist"))
+                    .unwrap()
+                    .to_string(),
                 creator: metadata["Creator"].to_string(),
                 source: metadata["Source"].to_string(),
                 // Space seperated
                 tags: metadata["Tags"].split(' ').map(str::to_string).collect(),
-                beatmap_id: metadata["BeatmapID"].parse()?,
-                beatmap_set_id: metadata["BeatmapSetID"].parse()?,
+                beatmap_id: metadata.get("BeatmapID").and_then(|&s| s.parse().ok()),
+                beatmap_set_id: metadata.get("BeatmapSetID").and_then(|&s| s.parse().ok()),
             },
             difficulty: Difficulty {
                 hp_drain_rate: difficulty["HPDrainRate"].parse().unwrap(),
