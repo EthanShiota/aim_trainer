@@ -97,4 +97,7 @@ pub fn tick(
         }
     }
     beat_map.scene_timer = sink.position();
+    if sink.empty() {
+        commands.set_state(AppState::ScoreSummery);
+    }
 }

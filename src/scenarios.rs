@@ -267,6 +267,7 @@ pub fn osu(
         0.0,
         osu_beat_map.difficulty.overall_difficulty,
         osu_beat_map.difficulty_multiplier(),
+        osu_beat_map,
     ));
 }
 

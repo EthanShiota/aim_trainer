@@ -1,18 +1,23 @@
 use std::time::Duration;
 
-use bevy::{color::palettes::tailwind::BLUE_300, prelude::*, text::TextSection};
+use bevy::{
+    color::palettes::tailwind::BLUE_300, feathers::theme::ThemeBackgroundColor, prelude::*,
+    text::TextSection,
+};
+use parser::BeatMapOsu;
 use tracing::instrument;
 
 use crate::{AppState, target::events::TargetHit};
 pub struct ScoringPlugin;
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct Score {
     pub points: f64,
     pub overall_difficulty: f32,
     pub difficulty_multiplier: f32,
     pub hit_counts: HitCounts,
     pub combo: usize,
+    pub metadata: Box<BeatMapOsu>,
 }
 
 #[derive(Default)]
@@ -24,20 +29,29 @@ pub struct HitCounts {
 }
 
 impl HitCounts {
-    fn accuarcy(&self) -> f64 {
+    pub fn accuracy(&self) -> f64 {
+        if self.n300 + self.n100 + self.n50 + self.miss == 0 {
+            return 1.;
+        }
         (300 * self.n300 + 100 * self.n100 + 50 * self.n50) as f64
             / (300 * (self.n300 + self.n100 + self.n50 + self.miss)) as f64
     }
 }
 
 impl Score {
-    pub fn new(points: f64, overall_difficulty: f32, difficulty_multiplier: f32) -> Self {
+    pub fn new(
+        points: f64,
+        overall_difficulty: f32,
+        difficulty_multiplier: f32,
+        metadata: BeatMapOsu,
+    ) -> Self {
         Self {
             points,
             overall_difficulty,
             difficulty_multiplier,
             combo: 0,
             hit_counts: default(),
+            metadata: Box::new(metadata),
         }
     }
 
@@ -186,9 +200,9 @@ fn setup(mut commands: Commands) {
 fn update_score(score: If<Res<Score>>, mut q_display: Query<&mut Text, With<ScoreDisplay>>) {
     if let Ok(mut text) = q_display.single_mut() {
         *text.get_text_mut() = format!(
-            "Score {} -> Accuarcy {}",
+            "Score {} -> Accuracy {}",
             score.points,
-            score.hit_counts.accuarcy()
+            score.hit_counts.accuracy()
         );
     }
 }

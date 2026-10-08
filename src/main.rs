@@ -114,10 +114,6 @@ fn main() {
             is_window_picking_enabled: false,
             ..default()
         })
-        .insert_resource(GlobalUiDebugOptions {
-            enabled: false,
-            ..default()
-        })
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
@@ -166,6 +162,8 @@ fn main() {
         // .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
         .add_systems(OnEnter(GameState::Paused), transition::pause)
         .add_systems(OnEnter(GameState::Playing), transition::play)
+        .add_systems(OnEnter(AppState::UiDebug), transition::ui_debug)
+        .add_systems(OnEnter(AppState::ScoreSummery), transition::score_summery)
         .add_systems(Update, bevy::ui::widget::update_viewport_render_target_size)
         // INFO: Game Logic loops
         .add_systems(
@@ -193,6 +191,8 @@ enum AppState {
     InGame,
     #[default]
     Menu,
+    UiDebug,
+    ScoreSummery,
 }
 
 #[derive(SubStates, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
@@ -275,6 +275,14 @@ fn global_bindings(
     if key_input.just_pressed(KeyCode::Equal) {
         ui_debug.enabled.toggle();
     }
+
+    if key_input.just_pressed(KeyCode::Comma) {
+        commands.set_state(AppState::UiDebug);
+    }
+
+    if key_input.just_pressed(KeyCode::Period) {
+        commands.set_state(AppState::ScoreSummery);
+    }
 }
 
 fn game_loop(
@@ -331,6 +339,10 @@ fn debug_window(
 }
 pub mod transition {
 
+    use parser::BeatMapOsu;
+
+    use crate::target::BeatMap;
+
     use super::*;
 
     pub(crate) fn play(
@@ -358,6 +370,22 @@ pub mod transition {
         cursor_options.grab_mode = CursorGrabMode::None;
         cursor_options.visible = true;
         commands.spawn_scene(menus::pause_menu());
+    }
+
+    pub(crate) fn ui_debug(mut commands: Commands) {
+        // INFO: Hook for debug window
+    }
+
+    pub(crate) fn score_summery(
+        mut commands: Commands,
+        score: Res<Score>,
+        mut grab_mode: ResMut<GrabMouse>,
+        mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
+    ) {
+        **grab_mode = false;
+        cursor_options.grab_mode = CursorGrabMode::None;
+        cursor_options.visible = true;
+        commands.spawn_scene(menus::score_summery(&score));
     }
 }
 

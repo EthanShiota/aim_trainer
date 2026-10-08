@@ -8,8 +8,18 @@ use std::{
 
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
-    color::palettes::css::{self, BLACK, WHITE},
-    feathers::{FeathersCorePlugin, font_styles, theme},
+    color::palettes::{
+        css::{self, BLACK, WHITE},
+        tailwind,
+    },
+    feathers::{
+        FeathersCorePlugin, font_styles,
+        theme::{
+            self, InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor,
+            ThemeTextColor, ThemedText,
+        },
+        tokens,
+    },
     input::common_conditions::input_just_pressed,
     input_focus::{AutoFocus, InputFocus},
     math::AspectRatio,
@@ -18,6 +28,7 @@ use bevy::{
     settings::SaveSettings,
     tasks::{Task, futures::check_ready},
     text::{EditableText, TextCursorStyle, TextEdit},
+    ui::Pressed,
     window::PrimaryWindow,
 };
 use bevy_egui::egui::{Ui, emath::Float};
@@ -27,6 +38,7 @@ use zip::{ZipArchive, result::ZipError};
 
 use crate::{
     AppState, GameSettings, GameState, SoundSettings, menus::components::container, scenarios,
+    scoreing::Score,
 };
 
 use components::crosshair_settings;
@@ -378,4 +390,90 @@ fn serialize_beatmaps(beatmap_dir: &str) -> Vec<Vec<BeatMapOsu>> {
         time::Instant::now().duration_since(now).as_secs_f64()
     );
     beat_maps
+}
+
+pub fn score_summery(score: &Score) -> impl Scene {
+    let acc = score.hit_counts.accuracy();
+    let map_name = &score.metadata.metadata.title;
+    bsn! {
+        DespawnOnExit::<AppState>(AppState::ScoreSummery)
+        Node {
+            width: percent(100.),
+            height: percent(100.),
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column
+        }
+        ThemeBackgroundColor(tokens::WINDOW_BG)
+        InheritableThemeTextColor(tokens::TEXT_MAIN)
+        Children [
+            header()
+            ThemedText
+            TextFont {
+                font_size: px(32)
+            }
+            Text(map_name)
+            ,
+            Node {
+                width: percent(100.),
+                flex_grow: 1.,
+            }
+            ThemedText
+            Children [
+                Node {
+                    height: percent(100.),
+                    aspect_ratio: 1f32,
+                    border: px(3),
+                    padding: px(20)
+                }
+                BorderColor::all(tailwind::GRAY_100)
+                ,
+                Node {
+                    display: Display::Flex,
+                    flex_grow: 1.,
+                    padding: px(20)
+                }
+                ThemedText
+                TextFont {
+                    font_size: px(32)
+                }
+                Text({format!("Score {}\nAccuracy {acc:.4}", score.points)})
+                Children [
+                    Node {
+                        width: px(300),
+                        height: px(64),
+                        border: px(4),
+                        display: Display::Grid,
+                        align_self: AlignSelf::End,
+                    }
+                    ThemeBorderColor(tokens::TEXT_MAIN)
+                    Button
+                    ThemedText
+                    Children [
+                        Node {
+                            align_self: AlignSelf::Center,
+                            justify_self: JustifySelf::Center
+                        }
+                        ThemedText
+                        Text("Menu")
+                        TextLayout {
+                            justify: Justify::Center,
+                        }
+                    ]
+                    on(|_: On<Pointer<Press>>, mut commands: Commands|{
+                        commands.set_state(AppState::Menu);
+                    })
+                ]
+            ]
+        ]
+    }
+}
+
+fn header() -> impl Scene {
+    bsn! {
+        Node {
+            width: vw(100.),
+            height: px(64),
+            padding: px(16)
+        }
+    }
 }

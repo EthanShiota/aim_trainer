@@ -23,10 +23,9 @@ use crate::{Crosshair, crosshair::CrosshairMaterial};
 pub fn theme() -> UiTheme {
     UiTheme(ThemeProps {
         color: HashMap::from([
-            (tokens::WINDOW_BG, Color::Srgba(tailwind::SLATE_700)),
-            (tokens::BUTTON_TEXT, Color::Srgba(tailwind::PINK_600)),
-            (tokens::TEXT_MAIN, Color::Srgba(tailwind::SLATE_700)),
-            (tokens::TEXT_DIM, Color::Srgba(tailwind::SLATE_400)),
+            (tokens::WINDOW_BG, Color::Srgba(tailwind::SLATE_800)),
+            (tokens::BUTTON_TEXT, Color::Srgba(tailwind::GREEN_200)),
+            (tokens::TEXT_MAIN, Color::Srgba(tailwind::GREEN_200)),
         ]),
     })
 }
@@ -72,12 +71,6 @@ macro_rules! settings_item_crosshair {
             },
         )
     };
-}
-
-fn get_crosshair_asset(ctx: &mut TemplateContext) -> Option<CrosshairMaterial> {
-    let crosshair_handle = ctx.resource::<Crosshair>().0.id();
-    let crosshair_assets = ctx.resource_mut::<Assets<CrosshairMaterial>>();
-    crosshair_assets.get(crosshair_handle).cloned()
 }
 
 pub fn settings_item<
