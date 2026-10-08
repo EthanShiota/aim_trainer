@@ -65,7 +65,7 @@
 # For more information, see the blog post at <https://blog.rust-lang.org/2023/11/09/parallel-rustc.html>.
 
 [target.x86_64-unknown-linux-gnu]
-linker = "mold"
+linker = "gcc"
 rustflags = [
   # LLD linker
   #
@@ -83,7 +83,7 @@ rustflags = [
   # - Ubuntu: `sudo apt-get install mold clang`
   # - Fedora: `sudo dnf install mold clang`
   # - Arch: `sudo pacman -S mold clang`
-  # "-Clink-arg=-fuse-ld=mold",
+  "-Clink-arg=-fuse-ld=mold",
 
   # Nightly
   "-Zshare-generics=y",
@@ -134,13 +134,13 @@ rustflags = [
 # cargo install -f cargo-binutils
 # rustup component add llvm-tools
 # ```
-linker = "rust-lld.exe"
-rustdocflags = ["-Clinker=rust-lld.exe"]
-rustflags = [
-  # Nightly
-  # "-Zshare-generics=n", # This needs to be off if you use dynamic linking on Windows.
-  # "-Zthreads=0",
-]
+linker = "lld-link"
+# rustdocflags = ["-Clinker=rust-lld.exe"]
+# rustflags = [
+#   # Nightly
+#   # "-Zshare-generics=n", # This needs to be off if you use dynamic linking on Windows.
+#   # "-Zthreads=0",
+# ]
 
 # Optional: Uncommenting the following improves compile times, but reduces the amount of debug info to 'line number tables only'
 # In most cases the gains are negligible, but if you are on macos and have slow compile times you should see significant gains.

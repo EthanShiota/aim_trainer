@@ -14,7 +14,6 @@ bevy = { version = "0.19.1", features = [
   "mesh_picking",
   "file_watcher",
   "debug",
-  "dynamic_linking",
   "bevy_dev_tools",
   "bevy_ui",
   "bevy_settings",
@@ -82,7 +81,7 @@ debug-assertions = false
 codegen-units = 1
 # Do a second optimization pass over the entire program, including dependencies.
 # Slows compile times, marginal improvements.
-# lto = "thin"
+lto = "thin"
 
 [profile.debugging]
 inherits = "dev"

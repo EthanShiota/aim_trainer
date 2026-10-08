@@ -14,3 +14,7 @@ devenv.local.yaml
 # pre-commit
 .pre-commit-config.yaml
 /crates/fps_camera/target
+/linux_release
+/windows_release
+/linux.zip
+/windows.zip

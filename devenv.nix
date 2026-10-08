@@ -17,19 +17,18 @@
     cargo-xwin
     mold
     libxkbcommon
+    libclang
   ];
   env.LD_LIBRARY_PATH = with pkgs;
+
+
   lib.makeLibraryPath [
       vulkan-loader
       libxcursor
       libxkbcommon
       wayland
   ];
-  languages.rust = {
-    enable = true;
-    channel = "nightly";
-    lsp.enable = true;
-    mold.enable = true;
-  };
+
+
 
 }
