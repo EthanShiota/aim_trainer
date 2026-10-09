@@ -1,4 +1,5 @@
 use std::{collections::HashMap, error::Error, path::PathBuf};
+use tracing::{debug, debug_span};
 
 use nom::{
     IResult, Parser,
@@ -10,9 +11,10 @@ use nom::{
         char,
         complete::{alphanumeric1, line_ending, multispace0, multispace1, not_line_ending, one_of},
     },
-    combinator::{map, opt, recognize, rest},
-    error::context,
-    multi::{many0, many1, separated_list1},
+    combinator::{eof, map, opt, recognize, rest},
+    error::{context, dbg_dmp},
+    error_position,
+    multi::{many0, many1, separated_list0, separated_list1},
     number::complete::recognize_float,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
 };
@@ -57,6 +59,7 @@ fn parse_slider_params(s: &[&str]) -> Result<SliderParams, Box<dyn Error>> {
         char(':'),
         preceded(multispace0, recognize_float),
     );
+    debug!(?s);
     let (_remainder, (slider_type, points)) = (
         preceded(multispace0, one_of("BCLP")),
         preceded(char('|'), separated_list1(char('|'), point)),
@@ -280,42 +283,52 @@ fn parser<'a>(
             preceded(tag("//"), not_line_ending::<&str, nom::error::Error<&str>>),
             multispace0,
         ))
-        .parse(input)
+        .parse_complete(input)
     };
     let key_value = |input: &'a str| {
-        terminated(
-            separated_pair(
-                terminated(recognize(alphanumeric1), multispace0),
-                char(':'),
-                recognize(not_line_ending::<&'a str, _>).map(|res| res.trim()),
+        context(
+            "key_value",
+            terminated(
+                separated_pair(
+                    terminated(recognize(alphanumeric1), multispace0),
+                    char(':'),
+                    recognize(not_line_ending::<&'a str, _>).map(|res| res.trim()),
+                ),
+                opt(line_ending),
             ),
-            opt(line_ending),
         )
-        .parse(input)
+        .parse_complete(input)
     };
 
     let list_value = |input: &'a str| {
-        delimited(
-            multispace0,
-            separated_list1(char(','), is_not(",\n\r")),
-            multispace0,
+        context(
+            "list_value",
+            delimited(
+                multispace0,
+                separated_list1(char(','), is_not(",\n\r")),
+                multispace0,
+            ),
         )
-        .parse(input)
+        .parse_complete(input)
     };
-    let body = take_until("\n[").or(rest);
+    let body = take_until("\n[").or(rest).or(eof);
 
     let section = pair(section_header, terminated(body, multispace0)).map(|(header, body)| {
+        debug!(?header);
+        debug!(?body);
         let values = match header {
             OsuHeader::General
             | OsuHeader::Editor
             | OsuHeader::Metadata
             | OsuHeader::Difficulty
-            | OsuHeader::Colours => many1(delimited(comment, key_value, comment))
-                .parse(body)
+            | OsuHeader::Colours => many0(delimited(comment, key_value, comment))
+                .parse_complete(body)
+                .inspect(|(l, value)| debug!(l, ?value))
                 .map(|(_, value)| OsuValue::KV(value.into_iter().collect())),
             OsuHeader::Events | OsuHeader::TimingPoints | OsuHeader::HitObjects => {
-                many1(delimited(comment, list_value, comment))
-                    .parse(body)
+                many0(delimited(comment, list_value, comment))
+                    .parse_complete(body)
+                    .inspect(|(l, value)| debug!(l, ?value))
                     .map(|(_, value)| OsuValue::List(value))
             }
         }
@@ -330,11 +343,15 @@ impl BeatMapOsu {
     pub fn new(value: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let s = std::fs::read_to_string(value.clone())?;
 
+        let file_name = value.to_string_lossy();
+        let span = debug_span!("parser");
+        let _guard = span.enter();
+        debug!(file_name = ?file_name);
         let (extra, parse_res) = parser(&s).map_err(|e| e.to_owned())?;
         let (_metadata, sections) = parse_res;
         let sections: HashMap<OsuHeader, OsuValue> = sections.into_iter().collect();
-        log::debug!("extra {:#?}", extra);
-        log::debug!("sections {:#?}", sections);
+        debug!("extra {:#?}", extra);
+        debug!("sections {:#?}", sections);
         let OsuValue::KV(general) = sections.get(&OsuHeader::General).unwrap() else {
             unreachable!()
         };
