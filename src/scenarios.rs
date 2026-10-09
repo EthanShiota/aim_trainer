@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use tracing::{Level, event};
+use tracing::{Level, event, instrument};
 
 use crate::{
     AudioBuffer, EditMode,
@@ -46,9 +46,13 @@ pub fn debug_scene(In(osu): In<BeatMapOsu>, mut commands: Commands) {
     // });
 }
 
+#[instrument]
 fn linear_curve(points: &[Vec2], curve_duration: f32, slides: usize) -> SampleAutoCurve<Vec3> {
+    debug!("Linear Curve");
+    // For some reason linear curves can have zero length segments so we must filter them out
     let curve = points
         .array_windows::<2>()
+        .filter(|[a, b]| a != b)
         .map(|&s| {
             let c = LinearSpline::new(s)
                 .to_curve()
