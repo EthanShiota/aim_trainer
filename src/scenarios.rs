@@ -48,7 +48,6 @@ pub fn debug_scene(In(osu): In<BeatMapOsu>, mut commands: Commands) {
 
 #[instrument]
 fn linear_curve(points: &[Vec2], curve_duration: f32, slides: usize) -> SampleAutoCurve<Vec3> {
-    debug!("Linear Curve");
     // For some reason linear curves can have zero length segments so we must filter them out
     let curve = points
         .array_windows::<2>()

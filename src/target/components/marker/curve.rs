@@ -2,7 +2,7 @@
 use bevy::color::palettes::css::{LIGHT_BLUE, RED, TURQUOISE};
 use bevy::color::palettes::tailwind::{RED_900, VIOLET_400};
 use bevy::gltf::{self, GltfMesh, GltfPrimitive};
-use bevy::math::{Affine3A, DAffine3, DQuat, DVec3};
+use bevy::math::{Affine3A, DAffine3, DQuat, DVec3, dmat3};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::render::render_resource::AsBindGroup;
@@ -95,17 +95,12 @@ fn curve_marker_gizmos(
                 segment.position + segment.normal.normalize() * 2.,
                 RED_900,
             );
-            let samples: Vec<_> = math_helpers::sample_circle(
-                10,
-                Transform::from_rotation(Quat::from_rotation_arc(
-                    Vec3::NEG_X,
-                    segment.normal.normalize(),
-                ))
-                .with_translation(segment.position)
-                .compute_affine(),
-                2.,
-            );
-            for sample in samples {
+            let y = segment.normal.to_vec3a().cross(Vec3A::Z);
+            let transform = mat3a(segment.normal.to_vec3a(), y, Vec3A::Z).inverse();
+            let mut circ = sample_circle(10, transform, 2.);
+            circ.iter_mut().for_each(|v| v.position += segment.position);
+
+            for sample in circ {
                 gizmos.line(sample.position, segment.position, VIOLET_400);
             }
         }
@@ -304,6 +299,7 @@ fn on_spawn_hint(
     );
 }
 
+#[derive(Debug)]
 struct Segment {
     position: Vec3,
     normal: Vec3,
@@ -337,7 +333,7 @@ fn generate_curve_info(curve: impl Curve<Vec3> + Clone) -> Vec<Segment> {
 
         segements.push(Segment {
             position: sample,
-            normal: tangent,
+            normal: tangent.normalize(),
         });
 
         // Advance by stepsize
@@ -365,15 +361,15 @@ mod math_helpers {
         }
     }
 
-    pub fn circle(i: f32, t: Affine3A, r: f32) -> Vertex {
-        let circ = yz_circle(i * TAU, r);
+    pub fn circle(i: f32, t: Mat3A, r: f32) -> Vertex {
+        let circ = t * yz_circle(i * TAU, r).position;
         Vertex {
-            position: t.transform_point3(circ.position),
-            normal: t.transform_vector3(circ.normal),
+            position: circ,
+            normal: circ,
         }
     }
 
-    pub fn sample_circle(n: usize, t: Affine3A, r: f32) -> Vec<Vertex> {
+    pub fn sample_circle(n: usize, t: Mat3A, r: f32) -> Vec<Vertex> {
         (0..n)
             .map(|i| circle(i as f32 / n as f32, t, r))
             .collect::<Vec<_>>()
@@ -400,22 +396,6 @@ mod math_helpers {
                 yz_circle(FRAC_PI_2, 1.).position,
                 vec3(0., f32::sin(FRAC_PI_2), f32::cos(FRAC_PI_2)),
                 0.06
-            ));
-        }
-
-        #[test]
-        fn circle_transformed() {
-            let transform = Affine3A::from_quat(Quat::from_rotation_arc(Vec3::X, Vec3::Z));
-            assert!(is_close(
-                circle(0., transform, 1.).position,
-                vec3(-1., 0., 0.),
-                0.01
-            ));
-
-            assert!(is_close(
-                circle(0., transform, 1.).normal,
-                vec3(-1., 0., 0.),
-                0.01
             ));
         }
     }
@@ -459,10 +439,10 @@ fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
         .into_iter()
         .flat_map(|segment: Segment| {
             // Transform to apply to ring at the segment
-            let transform = Affine3A::from_quat(
-                DQuat::from_rotation_arc(DVec3::NEG_X, segment.normal.normalize().as_dvec3())
-                    .as_quat(),
-            );
+
+            let normal = segment.normal.to_vec3a();
+            let y = normal.cross(Vec3A::Z);
+            let transform = mat3a(normal, y, Vec3A::Z).inverse();
             let mut circ = sample_circle(resolution, transform, radius);
             circ.iter_mut().for_each(|v| v.position += segment.position);
             circ
