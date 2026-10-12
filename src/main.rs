@@ -12,11 +12,13 @@ use bevy::audio::AddAudioSource;
 use bevy::camera::Exposure;
 use bevy::camera::Projection::Perspective;
 use bevy::core_pipeline::tonemapping::Tonemapping;
-use bevy::dev_tools::diagnostics_overlay::{DiagnosticsOverlay, DiagnosticsOverlayPlugin};
+
+use bevy::dev_tools::picking_debug::{DebugPickingMode, DebugPickingPlugin};
 use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
+use bevy::ui_widgets::UiWidgetsPlugins;
 use bevy_egui::egui::Widget;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
@@ -135,7 +137,7 @@ fn main() {
                 }),
             FPSCameraPlugin,
             FrameTimeDiagnosticsPlugin::default(),
-            DiagnosticsOverlayPlugin,
+            // DiagnosticsOverlayPlugin,
             EguiPlugin::default(),
             edit_mode::EditPlugin,
             menus::MenuPlugin,
@@ -407,16 +409,16 @@ fn setup_ui(
     });
     commands.insert_resource(Crosshair(crosshair));
 
-    commands.spawn((
-        DiagnosticsOverlay {
-            title: "Fps".into(),
-            items: vec![
-                DiagnosticPath::new("fps").into(),
-                DiagnosticPath::new("frame_time").into(),
-            ],
-        },
-        DespawnOnExit(AppState::InGame),
-    ));
+    // commands.spawn((
+    //     DiagnosticsOverlay {
+    //         title: "Fps".into(),
+    //         items: vec![
+    //             DiagnosticPath::new("fps").into(),
+    //             DiagnosticPath::new("frame_time").into(),
+    //         ],
+    //     },
+    //     DespawnOnExit(AppState::InGame),
+    // ));
 
     Ok(())
 }

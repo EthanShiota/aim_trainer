@@ -2,15 +2,22 @@ use bevy::{
     color::palettes::tailwind,
     ecs::{system::IntoObserverSystem, template::TemplateContext},
     feathers::{
+        dark_theme::create_dark_theme,
         theme::{
             InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor, ThemeProps,
             ThemeTextColor, ThemedText, UiTheme,
         },
         tokens::{self, BUTTON_BG, TEXT_MAIN},
     },
+    input_focus::{
+        AcquireFocus, AutoFocus, InputFocus, directional_navigation::FocusableArea,
+        tab_navigation::TabIndex,
+    },
     platform::collections::HashMap,
     prelude::*,
     text::{EditableText, EditableTextFilter, TextCursorStyle},
+    ui::FocusPolicy,
+    ui_widgets::TextInput,
 };
 
 use bevy::settings::SaveSettingsDeferred;
@@ -21,13 +28,17 @@ use bevy::text::TextEditChange;
 use crate::{Crosshair, crosshair::CrosshairMaterial};
 
 pub fn theme() -> UiTheme {
-    UiTheme(ThemeProps {
-        color: HashMap::from([
-            (tokens::WINDOW_BG, Color::Srgba(tailwind::SLATE_800)),
-            (tokens::BUTTON_TEXT, Color::Srgba(tailwind::GREEN_200)),
-            (tokens::TEXT_MAIN, Color::Srgba(tailwind::GREEN_200)),
-        ]),
-    })
+    let mut base = create_dark_theme();
+    base.semantic_base.insert(
+        tokens::semantic::SURFACE_WINDOW,
+        Color::Srgba(tailwind::SLATE_800),
+    );
+
+    base.semantic_base.insert(
+        tokens::semantic::TEXT_DEFAULT,
+        Color::Srgba(tailwind::GREEN_200),
+    );
+    UiTheme(base)
 }
 pub fn container() -> impl Scene {
     bsn! {
@@ -74,16 +85,15 @@ macro_rules! settings_item_crosshair {
 }
 
 pub fn settings_item<
-    I: IntoObserverSystem<E, B, M> + Clone + Sync + Send,
+    I: IntoObserverSystem<E, M> + Clone + Sync + Send,
     E: EntityEvent,
-    B: Bundle,
     M: 'static,
 >(
     label: &str,
     default_value: impl Fn(&mut TemplateContext) -> Option<String> + Send + Sync + 'static + Clone,
     update_function: I,
-) -> impl SceneList {
-    bsn_list! {
+) -> impl Scene {
+    bsn! {
         Node {
             border: px(4.),
             display: Display::Flex,
@@ -94,17 +104,20 @@ pub fn settings_item<
         InheritableThemeTextColor(tokens::BUTTON_TEXT)
         Children [
             Text(label)
-            ThemedText,
+            ThemedText
+            --
             Node {
-                flex_grow: 1.
+                flex_grow: 1.,
             }
             ThemedText
             template(move |ctx| {
                 Ok(EditableText::new(default_value(ctx).unwrap_or_default()))
             })
+            TextInput
             on(update_function)
+            // HACK: Allows for pointer focus
+            TabIndex(0)
             TextCursorStyle
-
         ]
 
     }
@@ -122,12 +135,18 @@ pub fn crosshair_settings() -> impl Scene {
         }
         ThemeBackgroundColor(tokens::WINDOW_BG)
         Children [
-            {settings_item_crosshair!("Dot Size: ", f32 => dot_radius)},
-            {settings_item_crosshair!("Crosshair Hairs: ", u32 => num_hairs)},
-            {settings_item_crosshair!("Gap: ", f32 => gap)},
-            {settings_item_crosshair!("Hair Rotation: ", f32 => hair_rotation)},
-            {settings_item_crosshair!("Hair Length: ", f32 => hair_length)},
-            {settings_item_crosshair!("Hair Width: ", f32 => hair_width)},
+            @{settings_item_crosshair!("Dot Size: ", f32 => dot_radius)}
+            --
+            @{settings_item_crosshair!("Crosshair Hairs: ", u32 => num_hairs)}
+            --
+            @{settings_item_crosshair!("Gap: ", f32 => gap)}
+            --
+            @{settings_item_crosshair!("Hair Rotation: ", f32 => hair_rotation)}
+            --
+            @{settings_item_crosshair!("Hair Length: ", f32 => hair_length)}
+            --
+            @{settings_item_crosshair!("Hair Width: ", f32 => hair_width)}
+            --
             Node {
                 width: percent(100.),
                 aspect_ratio: 1f32

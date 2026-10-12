@@ -34,6 +34,6 @@ impl Default for CrosshairMaterial {
 
 impl UiMaterial for CrosshairMaterial {
     fn fragment_shader() -> bevy::shader::ShaderRef {
-        "shaders/crosshair.wgsl".into()
+        "shaders/crosshair.wesl".into()
     }
 }

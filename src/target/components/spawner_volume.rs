@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use bevy::{math::sampling::UniformMeshSampler, prelude::*};
+use bevy::{prelude::*, shape::sampling::UniformMeshSampler};
 use rand::distr::Distribution;
 
 #[derive(Component, Clone, Reflect, FromTemplate)]
@@ -9,9 +9,9 @@ use rand::distr::Distribution;
 // #[component(on_add = on_add_register_mesh)]
 pub enum SpawnerVolume {
     #[default]
-    Sphere(bevy::math::primitives::Sphere),
-    Cuboid(bevy::math::primitives::Cuboid),
-    Torus(bevy::math::primitives::Torus),
+    Sphere(Sphere),
+    Cuboid(Cuboid),
+    Torus(Torus),
     Mesh(Vec<Triangle3d>),
 }
 

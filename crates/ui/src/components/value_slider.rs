@@ -33,10 +33,7 @@ impl ValueSlider {
     }
 }
 
-fn validate(
-    e: On<TextEditChange, ValueSlider>,
-    mut q: Query<(&mut EditableText, &mut ValueSlider)>,
-) {
+fn validate(e: On<TextEditChange>, mut q: Query<(&mut EditableText, &mut ValueSlider)>) {
     if let Ok((text, mut slider)) = q.get_mut(e.event_target())
         && let Ok(val) = text.value().to_string().parse::<f64>()
     {
@@ -54,7 +51,7 @@ fn on_focus_loss(e: On<FocusLost>, mut q: Query<(&mut EditableText, &mut ValueSl
     }
 }
 fn on_drag_end(
-    e: On<Pointer<DragEnd>>,
+    e: On<PointerDragEnd>,
     mut q: Query<(&mut EditableText, &mut ValueSlider)>,
     mut window: Query<(&mut CursorOptions, &Window)>,
 ) {
@@ -67,14 +64,14 @@ fn on_drag_end(
     }
 }
 
-fn on_drag_start(e: On<Pointer<DragStart>>, mut window: Query<(&mut CursorOptions, &Window)>) {
+fn on_drag_start(e: On<PointerDragStart>, mut window: Query<(&mut CursorOptions, &Window)>) {
     for (mut options, _) in window.iter_mut().filter(|(_, w)| w.focused) {
         options.visible = false;
     }
 }
 
 fn on_drag(
-    e: On<Pointer<Drag>>,
+    e: On<PointerDrag>,
     mut slider: Single<(&mut ValueSlider, &mut EditableText)>,
     mut window: Query<(&mut Window, &mut CursorOptions)>,
     keyboard: Res<ButtonInput<KeyCode>>,

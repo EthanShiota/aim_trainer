@@ -15,7 +15,7 @@ use bevy::{
     animation::{AnimatedBy, animate_targets, animated_field},
     asset::{RenderAssetUsages, uuid::Uuid},
     color::palettes::tailwind::{BLUE_300, GREEN_400, RED_100, RED_800},
-    math::curve,
+    curve,
     prelude::*,
 };
 
@@ -59,7 +59,7 @@ pub struct CurveMarkerMaterial {
 
 impl Material for CurveMarkerMaterial {
     fn fragment_shader() -> bevy::shader::ShaderRef {
-        "shaders/curve_marker.wgsl".into()
+        "shaders/curve_marker.wesl".into()
     }
 }
 
@@ -67,7 +67,7 @@ impl Material for CurveMarkerMaterial {
 #[derive(Component, Clone)]
 #[require(super::Marker)]
 pub struct CurveMarker {
-    pub curve: bevy::math::curve::SampleAutoCurve<Vec3>,
+    pub curve: bevy::curve::SampleAutoCurve<Vec3>,
     pub num_ticks: f32,
     pub slides: usize,
     // duration of curve
@@ -143,7 +143,6 @@ fn on_spawn_hint(
         |f| f,
     );
     let mesh = create_curve_mesh(mesh_curve);
-    // TODO: Make the curve despawn when the animation is done
     let hint = commands
         .spawn_scene(bsn! {
             Name("Curve Path")
@@ -152,9 +151,9 @@ fn on_spawn_hint(
             //     translation: vec3(0.,0.,-50.)
             // }
             DespawnOnExit::<AppState>(AppState::InGame)
-            // MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
+            MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
 
-            MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
+            // MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
         })
         .id();
 
@@ -208,14 +207,14 @@ fn on_spawn_hint(
     let mut slider = commands
         .entity(entity)
         .apply_scene(bsn! {
-            {target_resource.target_scene()}
+            @{target_resource.target_scene()}
             Transform {
                 translation: {curve_marker.curve.sample_unchecked(0.)}
             }
             FadeIn({Timer::new(preempt, TimerMode::Once)})
-            template_value(Lifetime::duration(preempt + Duration::from_millis(400)))
-            template_value(Target::Marker)
-            template_value(player)
+            Lifetime::duration(preempt + Duration::from_millis(400))
+            Target::Marker
+            player
             AnimationGraphHandle(asset_value(animation_graph))
             DespawnOnExit::<AppState>(AppState::InGame)
         })

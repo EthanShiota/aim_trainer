@@ -1,11 +1,8 @@
 #![allow(unused)]
 use bevy::{
     color::palettes::css::RED,
-    math::{
-        NormedVectorSpace, VectorSpace,
-        bounding::Bounded2d,
-        cubic_splines::{self, LinearSpline},
-    },
+    curve::cubic_splines::{self, LinearSpline},
+    math::{NormedVectorSpace, VectorSpace},
     prelude::*,
 };
 use bevy_egui::egui::os;
@@ -340,7 +337,7 @@ fn create_curve_marker(
             let center = circle_center(points[0], points[1], points[2]);
             let radius = center.distance(points[0]);
 
-            let unlooped_curve = bevy::math::curve::FunctionCurve::new(Interval::UNIT, |i| {
+            let unlooped_curve = bevy::curve::FunctionCurve::new(Interval::UNIT, |i| {
                 let angle = i * TAU * percent_circle;
                 let xy = vec2(
                     center.x + radius * f32::cos(angle),

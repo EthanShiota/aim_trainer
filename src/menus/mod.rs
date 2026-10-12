@@ -21,7 +21,7 @@ use bevy::{
         tokens,
     },
     input::common_conditions::input_just_pressed,
-    input_focus::{AutoFocus, InputFocus},
+    input_focus::{AutoFocus, InputFocus, pointer_focus::PointerFocusPlugin},
     math::AspectRatio,
     prelude::*,
     render::render_resource::BlendState,
@@ -29,6 +29,7 @@ use bevy::{
     tasks::{Task, futures::check_ready},
     text::{EditableText, TextCursorStyle, TextEdit},
     ui::Pressed,
+    ui_widgets::{self, TextInputPlugin},
     window::PrimaryWindow,
 };
 use bevy_egui::egui::{Ui, emath::Float};
@@ -76,7 +77,8 @@ pub fn pause_menu() -> impl Scene {
         }
         DespawnOnExit::<GameState>(GameState::Paused)
         Children [
-            crosshair_settings(),
+            @crosshair_settings()
+            --
             Node {
                  flex_direction: FlexDirection::Column width: percent(20.),
                  height: percent(20.),
@@ -87,28 +89,25 @@ pub fn pause_menu() -> impl Scene {
             Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween, border: px(4.)}
             BorderColor::all(css::BLACK)
             Children [
-                (
                     Node {width: percent(100.), height: percent(50.), align_items: AlignItems::Center, justify_content: JustifyContent::Center, justify_items: JustifyItems::Center}
                     BackgroundColor(css::BLACK)
-                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
+                    on(|_: On<PointerPress>, mut commands: Commands| {
                         commands.set_state(GameState::Playing);
                     })
                     Children [
                         Node {justify_content: JustifyContent::Center}
                         Text::new("Exit")
                     ]
-                ),
-                (
+                    --
                     Node {width: percent(100.), height: percent(50.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
                     BackgroundColor(css::BLACK)
-                    on(|_: On<Pointer<Press>>, mut commands: Commands| {
+                    on(|_: On<PointerPress>, mut commands: Commands| {
                         commands.set_state(AppState::Menu);
                     })
                     Children [
                         Node {justify_content: JustifyContent::Center}
                         Text::new("Main Menu")
                     ]
-                ),
             ]
         ]
     }
@@ -221,7 +220,7 @@ fn main_menu(
         *beat_maps = serialize_beatmaps(beatmap_dir);
     });
 
-    egui::CentralPanel::default().show_inside(&mut viewport_ui, |ui| {
+    egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
         // Import new beatmap
         if ui.button("Import Beatmap").clicked() && selected_file.is_empty() {
             let thread_pool = bevy::tasks::AsyncComputeTaskPool::get();
@@ -354,7 +353,7 @@ fn unzip_beatmap(base_dir: &Path, beatmap_path: &Path) -> Result<(), Box<dyn Err
                 }
             }
         } else {
-            info!("skipping file with invalid path: {}", file.name());
+            info!("skipping file with invalid path: {}", file.name()?);
         }
     }
     Ok(())
@@ -406,13 +405,13 @@ pub fn score_summery(score: &Score) -> impl Scene {
         ThemeBackgroundColor(tokens::WINDOW_BG)
         InheritableThemeTextColor(tokens::TEXT_MAIN)
         Children [
-            header()
+            @header()
             ThemedText
             TextFont {
                 font_size: px(32)
             }
             Text(map_name)
-            ,
+            --
             Node {
                 width: percent(100.),
                 flex_grow: 1.,
@@ -426,7 +425,7 @@ pub fn score_summery(score: &Score) -> impl Scene {
                     padding: px(20)
                 }
                 BorderColor::all(tailwind::GRAY_100)
-                ,
+                --
                 Node {
                     display: Display::Flex,
                     flex_grow: 1.,
@@ -446,7 +445,7 @@ pub fn score_summery(score: &Score) -> impl Scene {
                         align_self: AlignSelf::End,
                     }
                     ThemeBorderColor(tokens::TEXT_MAIN)
-                    Button
+                    ui_widgets::Button
                     ThemedText
                     Children [
                         Node {
@@ -459,7 +458,7 @@ pub fn score_summery(score: &Score) -> impl Scene {
                             justify: Justify::Center,
                         }
                     ]
-                    on(|_: On<Pointer<Press>>, mut commands: Commands|{
+                    on(|_: On<PointerPress>, mut commands: Commands|{
                         commands.set_state(AppState::Menu);
                     })
                 ]

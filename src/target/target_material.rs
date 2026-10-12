@@ -23,7 +23,7 @@ pub struct TargetMaterial {
 
 impl Material for TargetMaterial {
     fn fragment_shader() -> bevy::shader::ShaderRef {
-        "shaders/target_material.wgsl".into()
+        "shaders/target_material.wesl".into()
     }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Premultiplied

@@ -97,8 +97,8 @@ pub fn on_target_destroyed(
 ) {
     if let Ok(&t) = q_transform.get(e.event_target()) {
         commands.spawn_scene(bsn! {
-            crate::effects::hit_sound(sound_settings.effects_volume)
-            template_value(t)
+            @crate::effects::hit_sound(sound_settings.effects_volume)
+            t
             DespawnOnExit::<AppState>(AppState::InGame)
         });
     }

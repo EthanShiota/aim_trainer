@@ -1,18 +1,18 @@
-#import bevy_pbr::{
+import bevy_pbr::render::{
     mesh_view_bindings::{view,globals},
     forward_io::VertexOutput,
     utils::coords_to_viewport_uv,
     view_transformations::{uv_to_ndc, frag_coord_to_ndc}
-}
-#import bevy_render::view::direction_view_to_world;
-#import bevy_render::maths
+};
+import bevy_render::view::direction_view_to_world;
+import bevy_render::maths;
 
 const TAU: f32 = 6.28318530718;
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> color: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(101) var<uniform> ring: f32;
-@group(#{MATERIAL_BIND_GROUP}) @binding(102) var<uniform> ring_width: f32;
-@group(#{MATERIAL_BIND_GROUP}) @binding(103) var<uniform> hovered: i32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> color: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(101) var<uniform> ring: f32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(102) var<uniform> ring_width: f32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(103) var<uniform> hovered: i32;
 
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment

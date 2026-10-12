@@ -80,9 +80,7 @@ pub struct RingMaterial {
 
 impl Material for RingMaterial {
     fn fragment_shader() -> bevy::shader::ShaderRef {
-        // bevy::shader::ShaderRef::from("shaders/ring_material.wgsl")
-
-        "shaders/ring_material.wgsl".into()
+        "shaders/ring_material.wesl".into()
     }
 
     fn opaque_render_method(&self) -> bevy::material::OpaqueRendererMethod {

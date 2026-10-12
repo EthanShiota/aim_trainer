@@ -9,7 +9,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-bevy = { version = "0.19.1", features = [
+bevy = { version = "0.20.0", features = [
   "multi_threaded",
   "mesh_picking",
   "file_watcher",
@@ -18,16 +18,17 @@ bevy = { version = "0.19.1", features = [
   "bevy_ui",
   "bevy_settings",
   "serialize",
+  "picking",
   "jpeg",
   "ktx2",
   "bevy_feathers",
 ] }
-bevy_egui = "0.42.0"
+bevy_egui = "0.43.0"
 
 [dependencies]
 parser = { path = "./crates/parser" }
 fps_camera = { path = "./crates/fps_camera" }
-ui = { path = "./crates/ui" }
+# ui = { path = "./crates/ui" }
 bevy = { workspace = true }
 # bevy_skein = "0.6.0"
 # bevy-inspector-egui = "0.37.0"
@@ -45,7 +46,7 @@ tracing = { version = "0.1", features = [
   "max_level_debug",
   "release_max_level_warn",
 ] }
-zip = "8.6.0"
+zip = "9.0.0"
 
 [features]
 # Enables tracing

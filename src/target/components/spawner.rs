@@ -61,6 +61,7 @@ pub fn debug_spawn_target(
     target_res: Res<TargetResource>,
     player_camera_transform: Single<&Transform, With<PlayerCamera>>,
 ) {
+    let cam_transform = *player_camera_transform.into_inner();
     commands.spawn_scene(bsn! {
         Mesh3d({target_res.mesh.clone()})
         MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {
@@ -69,9 +70,9 @@ pub fn debug_spawn_target(
             ..default()
         }))
         Target
-        template_value(player_camera_transform.with_translation(
-            player_camera_transform.translation + *player_camera_transform.forward() * 40.
-        ))
+        cam_transform.with_translation(
+            cam_transform.translation + *cam_transform.forward() * 40.
+        )
     });
 }
 
@@ -103,8 +104,8 @@ pub fn spawner_loop(
 
             commands.entity(entity).with_children(|c| {
                 c.commands().spawn_scene(bsn! {
-                    template_value(Target::Counter(1))
-                    template_value(Visibility::Visible)
+                    Target::Counter(1)
+                    Visibility::Visible
                     Transform::from_translation(target_translation)
                     Mesh3d({target_res.mesh.clone()})
                     MeshMaterial3d::<TargetMaterial>(asset_value(TargetMaterial {

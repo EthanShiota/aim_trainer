@@ -23,7 +23,7 @@ pub fn on_spawn_hint(
     q_target_markers: Query<(Entity, &super::Marker, &Transform), With<TargetMarker>>,
     mut target_resource: ResMut<TargetResource>,
 ) {
-    let Ok((entity, marker, spawn_location)) = q_target_markers.get(e.event_target()) else {
+    let Ok((entity, marker, &spawn_location)) = q_target_markers.get(e.event_target()) else {
         return;
     };
     let preempt = marker.spawn_time - marker.preempt;
@@ -38,12 +38,12 @@ pub fn on_spawn_hint(
         .entity(entity)
         .apply_scene(bsn! {
             target::FadeIn({Timer::new(preempt,TimerMode::Once)})
-            {target_resource.target_scene()}
+            @{target_resource.target_scene()}
             // Mesh3d({target_resource.mesh.clone()})
             // MeshMaterial3d::<TargetMaterial>(asset_value(mat))
-            template_value(*spawn_location)
+            spawn_location
             DespawnOnExit::<AppState>(AppState::InGame)
-            template_value(Target::Counter(1))
+            Target::Counter(1)
             Lifetime::duration(preempt + miss_duration)
         })
         .observe(
