@@ -19,6 +19,8 @@ pub struct TargetMaterial {
     pub ring_width: f32,
     #[uniform(103)]
     pub hovered: i32,
+    #[uniform(104)]
+    pub priority: u32,
 }
 
 impl Material for TargetMaterial {
@@ -29,7 +31,7 @@ impl Material for TargetMaterial {
         AlphaMode::Blend
     }
     fn depth_bias(&self) -> f32 {
-        -64.
+        -64. + self.priority as f32
     }
 }
 
@@ -40,6 +42,7 @@ impl Default for TargetMaterial {
             ring: 0.1,
             ring_width: 0.1,
             color: GREEN_300.into(),
+            priority: u32::MAX,
         }
     }
 }

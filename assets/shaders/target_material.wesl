@@ -13,6 +13,7 @@ const TAU: f32 = 6.28318530718;
 @group(constants::MATERIAL_BIND_GROUP) @binding(101) var<uniform> ring: f32;
 @group(constants::MATERIAL_BIND_GROUP) @binding(102) var<uniform> ring_width: f32;
 @group(constants::MATERIAL_BIND_GROUP) @binding(103) var<uniform> hovered: i32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(104) var<uniform> priority: u32;
 
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment
@@ -42,20 +43,23 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let ring_lower = ring - ring_width;
     let ring_upper = ring + ring_width;
-    let modifier = smoothstep(ring_lower, ring, obj_angle) - smoothstep(ring, ring_upper, obj_angle);
+    var modifier = smoothstep(ring_lower, ring, obj_angle) - smoothstep(ring, ring_upper, obj_angle);
 
     // 3. Return the Final Color
     // The final output of a fragment shader must be a `vec4<f32>` representing
     // an RGBA color. We construct our output by taking our calculated RGB `vec3`
     // and adding a fixed alpha component of 1.0 for full opacity.
     // return vec4<f32>(color, 1.0) 
-    //
+
+    if priority == 0 {
+      modifier = step(ring_lower, obj_angle) - step(ring_upper, obj_angle);
+    }
     let color_ring = vec4f(normalize(color.xyz) * modifier, 0.0);
-    var final_color = vec4<f32>(0.0, 0.0, 0.0, modifier) + color_ring + rimlight * color;
+    var final_color = vec4<f32>(0.0, 0.0, 0.0, modifier) + color_ring + rimlight * vec4f(color.rgb,0.0);
     if hovered == 1 {
       return color;
-
     }
+    
     return final_color;
 }
 

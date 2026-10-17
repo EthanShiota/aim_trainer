@@ -7,7 +7,7 @@ use crate::{AppState, SoundSettings};
 use bevy::prelude::*;
 use tracing::instrument;
 
-use crate::target::{Active, TargetMaterial, TargetResource};
+use crate::target::{Active, Marker, TargetMaterial, TargetResource};
 
 // Marker component for targets
 #[derive(Component, Copy, Clone)]
@@ -28,24 +28,34 @@ impl Default for Target {
 
 pub fn tick(
     mut mats: ResMut<Assets<TargetMaterial>>,
-    mut q_target: Query<(Entity, &mut FadeIn, &MeshMaterial3d<TargetMaterial>)>,
+    mut q_target: Query<(
+        Entity,
+        Option<&mut FadeIn>,
+        &MeshMaterial3d<TargetMaterial>,
+        &Marker,
+    )>,
     target_resource: Res<TargetResource>,
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
     let dt = time.delta();
-    for (entity, mut fade_in, mat) in q_target.iter_mut() {
-        fade_in.0.tick(dt);
-        if let Some(mut m) = mats.get_mut(mat) {
-            let ease = target_resource
-                .easing
-                .sample_unchecked(fade_in.0.fraction());
-            m.ring = (1. - ease) * target_resource.ring_start + ease * target_resource.ring_end;
+    for (order, (entity, fade_in, mat, _)) in q_target.iter_mut().sort::<&Marker>().enumerate() {
+        // lowest order needs to be clicked first
 
-            if fade_in.0.is_finished() {
-                m.ring_width = 2.;
-                commands.entity(entity).try_remove::<FadeIn>();
+        if let Some(mut m) = mats.get_mut(mat) {
+            if let Some(mut fade_in) = fade_in {
+                let ease = target_resource
+                    .easing
+                    .sample_unchecked(fade_in.0.fraction());
+                fade_in.0.tick(dt);
+                if fade_in.0.is_finished() {
+                    m.ring_width = 2.;
+                    commands.entity(entity).try_remove::<FadeIn>();
+                }
+                m.ring = (1. - ease) * target_resource.ring_start + ease * target_resource.ring_end;
             }
+
+            m.priority = order as u32;
         }
     }
 }
