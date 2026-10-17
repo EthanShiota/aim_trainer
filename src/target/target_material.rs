@@ -26,7 +26,10 @@ impl Material for TargetMaterial {
         "shaders/target_material.wesl".into()
     }
     fn alpha_mode(&self) -> AlphaMode {
-        AlphaMode::Premultiplied
+        AlphaMode::Blend
+    }
+    fn depth_bias(&self) -> f32 {
+        -64.
     }
 }
 

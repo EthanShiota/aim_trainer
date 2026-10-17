@@ -37,7 +37,7 @@ use crate::crosshair::CrosshairMaterial;
 use crate::input::{Hovered, InputMessage};
 use crate::scoreing::Score;
 use crate::target::events::{TargetDestroyed, TargetHit};
-use crate::target::{Marker, Target, TargetResource};
+use crate::target::{CurveMarker, Marker, Target, TargetMarker, TargetResource};
 use fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 
 #[derive(Resource, Clone, SettingsGroup, Reflect)]
@@ -311,6 +311,8 @@ fn game_loop(
 fn debug_window(
     mut contexts: EguiContexts,
     target_resource: Option<ResMut<TargetResource>>,
+    q_targets: Query<(Entity, &Marker, Option<&CurveMarker>, Option<&TargetMarker>)>,
+    mut commands: Commands,
     score: Option<Res<Score>>,
 ) -> Result {
     if let Some(mut target_resource) = target_resource {
@@ -332,11 +334,26 @@ fn debug_window(
         });
     }
 
-    if let Some(score) = score {
-        egui::Window::new("score").show(contexts.ctx_mut()?, |ui| {
-            ui.label(format!("points: {}", score.points));
+    egui::Window::new("Game State")
+        .scroll([false, true])
+        .max_height(400.)
+        .show(contexts.ctx_mut()?, |ui| -> Result {
+            for (entity, marker, curve, target) in q_targets.into_iter() {
+                let marker_type = match (curve, target) {
+                    (Some(_), Some(_)) => return Err("Marker with both types".into()),
+                    (Some(_), _) => "Curve",
+                    (_, Some(_)) => "Point",
+                    (None, None) => return Err("Marker without marker type".into()),
+                };
+                if ui
+                    .button(format!("{marker_type} Marker: {:?}", marker.time()))
+                    .clicked()
+                {
+                    commands.entity(entity).log_components();
+                }
+            }
+            Ok(())
         });
-    }
     Ok(())
 }
 pub mod transition {

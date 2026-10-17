@@ -1,5 +1,6 @@
 #![allow(unused)]
-use bevy::color::palettes::css::{LIGHT_BLUE, RED, TURQUOISE};
+use bevy::color::ColorCurve;
+use bevy::color::palettes::css::{DARK_BLUE, LIGHT_BLUE, RED, TURQUOISE};
 use bevy::color::palettes::tailwind::{RED_900, VIOLET_400};
 use bevy::gltf::{self, GltfMesh, GltfPrimitive};
 use bevy::math::{Affine3A, DAffine3, DQuat, DVec3, dmat3};
@@ -20,7 +21,9 @@ use bevy::{
 };
 
 use crate::SoundSettings;
+use crate::input::Hovered;
 use crate::scoreing::{LifetimeEvent, Score, SliderScorer};
+use crate::target::Active;
 use crate::target::components::beat_map::BeatMapResource;
 use crate::target::components::marker::curve::math_helpers::{circle, sample_circle};
 use crate::{
@@ -40,6 +43,10 @@ impl Plugin for CurvePlugin {
             (curve_marker_gizmos.run_if(resource_equals(DebugMode(true))),),
         )
         .add_plugins(MaterialPlugin::<CurveMarkerMaterial>::default())
+        .add_systems(
+            Update,
+            tick_curve_material.run_if(in_state(GameState::Playing)),
+        )
         .insert_gizmo_config(
             CurveGizmo,
             GizmoConfig {
@@ -47,19 +54,67 @@ impl Plugin for CurvePlugin {
                 ..default()
             },
         )
-        .add_observer(on_spawn_hint);
+        .add_observer(on_spawn_hint)
+        .add_observer(change_slider_color);
     }
 }
 
 #[derive(AsBindGroup, Clone, Asset, TypePath)]
 pub struct CurveMarkerMaterial {
-    #[uniform(100)]
-    color: LinearRgba,
+    #[uniform(0)]
+    before_color: LinearRgba,
+    // [0,1] -> indicate slider progress
+    #[uniform(1)]
+    t: f32,
+
+    #[uniform(2)]
+    slides: u32,
+
+    #[uniform(3)]
+    after_color: LinearRgba,
+
+    color: ColorCurve<Oklaba>,
+
+    elapsed_time: Timer,
 }
+
+/// Animate Curve material by updating the uniforms
+fn tick_curve_material(
+    mut materials: ResMut<Assets<CurveMarkerMaterial>>,
+    q_animate: Query<&MeshMaterial3d<CurveMarkerMaterial>, With<AnimateCurveMarker>>,
+    time: Res<Time<Virtual>>,
+) {
+    for ent in q_animate.iter() {
+        if let Some(mut mat) = materials.get_mut(ent.id()) {
+            mat.elapsed_time.tick(time.delta());
+            mat.t = mat.elapsed_time.fraction();
+        }
+    }
+}
+
+fn change_slider_color(
+    e: On<SliderRepeat>,
+    mut materials: ResMut<Assets<CurveMarkerMaterial>>,
+    q_parent: Query<&ChildOf>,
+    q_handle: Query<&MeshMaterial3d<CurveMarkerMaterial>>,
+) {
+    let parent = q_parent.get(e.0).unwrap();
+    let handle = q_handle.get(parent.parent()).unwrap().id();
+    let mut mat = materials.get_mut(handle).unwrap();
+    let next_color_t = mat.t + (mat.slides as f32).recip();
+    mat.before_color = mat.after_color;
+    mat.after_color = mat.color.sample_clamped(next_color_t).into();
+}
+
+#[derive(Component)]
+struct AnimateCurveMarker;
 
 impl Material for CurveMarkerMaterial {
     fn fragment_shader() -> bevy::shader::ShaderRef {
         "shaders/curve_marker.wesl".into()
+    }
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Blend
     }
 }
 
@@ -143,6 +198,8 @@ fn on_spawn_hint(
         |f| f,
     );
     let mesh = create_curve_mesh(mesh_curve);
+    let hint_color: ColorCurve<Oklaba> =
+        ColorCurve::new([DARK_BLUE.into(), LIGHT_BLUE.into()]).unwrap();
     let hint = commands
         .spawn_scene(bsn! {
             Name("Curve Path")
@@ -151,7 +208,14 @@ fn on_spawn_hint(
             //     translation: vec3(0.,0.,-50.)
             // }
             DespawnOnExit::<AppState>(AppState::InGame)
-            MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {color: GREEN_400.into()}))
+            MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {
+                before_color: hint_color.sample_unchecked(0.0).into(),
+                after_color: hint_color.sample_unchecked((curve_marker.slides as f32).recip()).into(),
+                t: 0.0,
+                slides: curve_marker.slides as u32,
+                color: hint_color,
+                elapsed_time: Timer::from_seconds(curve_marker.duration, TimerMode::Once)
+            }))
 
             // MeshMaterial3d<StandardMaterial>(asset_value(StandardMaterial::from_color(LIGHT_BLUE)))
         })
@@ -223,9 +287,7 @@ fn on_spawn_hint(
                   mut q_player: Query<&mut AnimationPlayer>,
                   mut commands: Commands,
                   time: Res<Time<Virtual>>| {
-                // commands
-                //     .entity(hint)
-                //     .insert(Lifetime::duration(anim_duration));
+                commands.entity(hint).insert(AnimateCurveMarker);
                 commands
                     .entity(e.event_target())
                     .insert(Target::Marker)
@@ -262,9 +324,8 @@ fn on_spawn_hint(
                         }
                     }
 
-                    commands.entity(e.event_target()).trigger(SpawnTarget);
                     commands.entity(e.event_target()).remove::<Lifetime>();
-                    commands.entity(e.event_target()).remove::<Target>();
+                    commands.entity(e.event_target()).trigger(SpawnTarget);
 
                     // span.in_scope(|| {
                     //     commands.spawn_scene(crate::effects::hit_sound(sound_settings.effects_volume));

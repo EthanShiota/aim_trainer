@@ -44,8 +44,9 @@ impl Plugin for TargetPlugin {
             .add_plugins(MaterialPlugin::<TargetMaterial>::default())
             .add_plugins(MarkerPlugin)
             .add_plugins(TimingRingPlugin)
-            .add_systems(Update, add_effect)
-            .add_systems(Update, sync_effect)
+            // Order matters because cull_active removes if the input is not held which is true when
+            // active is inserted
+            .add_systems(Update, (cull_active, add_effect, sync_effect).chain())
             // INFO: Gizmo
             .insert_gizmo_config(
                 SpawnerGizmo,
@@ -108,7 +109,7 @@ impl Plugin for TargetPlugin {
 fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     let color_curve =
         Arc::new(Mutex::new((0..).map(|i| {
-            Oklcha::new(0.7507, 0.1372, (i as f32 * 4.) % 360., 1.).into()
+            Oklcha::new(0.7507, 0.1372, (i as f32 * 22.5) % 360., 1.).into()
         })));
     commands.insert_resource(TargetResource {
         mesh: meshes.add(Sphere::new(2.)),
@@ -134,45 +135,57 @@ fn add_effect(
     >,
     q_curve: Query<(), With<CurveMarker>>,
     mut commands: Commands,
-    mut reader: PopulatedMessageReader<InputMessage>,
+    mut reader: MessageReader<InputMessage>,
 ) {
-    if let Some(mut target) = hovered
-        .into_iter()
-        .sort_by_key::<&Marker, _>(|m| m.time())
-        .next()
-    {
-        for msg in reader.read() {
-            if let InputMessage::FireWeapon = msg
-                && q_curve.contains(target.0)
-            {
-                target.3.scale = Vec3::splat(1.5);
+    let mut hovered = hovered.into_iter().sort_by_key::<&Marker, _>(|m| m.time());
 
-                commands.entity(target.0).try_insert(Active);
-            }
+    for msg in reader.read() {
+        let Some(mut target) = hovered.next() else {
+            continue;
+        };
+        if let InputMessage::FireWeapon = msg
+            && q_curve.contains(target.0)
+        {
+            target.3.scale = Vec3::splat(1.5);
+
+            commands.entity(target.0).insert(Active);
         }
-    };
+    }
 }
 
+// Sync material properties to active status
 fn sync_effect(
-    active: Query<(&MeshMaterial3d<TargetMaterial>, Entity), (With<Active>, With<Hovered>)>,
+    q_active: Query<(&MeshMaterial3d<TargetMaterial>, Entity), With<Active>>,
+    q_inactive: Query<(&MeshMaterial3d<TargetMaterial>, &mut Transform, Entity), Without<Active>>,
     mut target_material: ResMut<Assets<TargetMaterial>>,
+) {
+    for active in q_active.into_iter() {
+        if let Some(mut material) = target_material.get_mut(active.0.id()) {
+            material.hovered = 1;
+        }
+    }
+
+    for mut inactive in q_inactive.into_iter() {
+        if let Some(mut material) = target_material.get_mut(inactive.0.id()) {
+            material.hovered = 0;
+        }
+        inactive.1.scale = Vec3::splat(1.);
+    }
+}
+
+fn cull_active(
     mut reader: MessageReader<InputMessage>,
     mut commands: Commands,
+    q_active: Query<Entity, With<Active>>,
 ) {
-    let active_materials: std::collections::HashMap<AssetId<TargetMaterial>, Entity> =
-        active.into_iter().map(|(mat, e)| (mat.id(), e)).collect();
-
     let pressed = reader
         .read()
         .any(|msg| matches!(msg, InputMessage::FireWeaponHeld));
-    for (id, material) in target_material.iter_mut() {
-        if pressed && active_materials.contains_key(&id) {
-            material.hovered = 1;
-        } else {
-            material.hovered = 0;
-            if let Some(entity) = active_materials.get(&id) {
-                commands.entity(*entity).try_remove::<Active>();
-            }
+
+    // Remove active from all active
+    if !pressed {
+        for active in q_active.into_iter() {
+            commands.entity(active).remove::<Active>();
         }
     }
 }

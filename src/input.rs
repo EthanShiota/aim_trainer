@@ -7,7 +7,7 @@ use bevy::app::AnimationSystems;
 use bevy::picking::mesh_picking::ray_cast::RayCastVisibility::Visible;
 use bevy::prelude::*;
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 pub enum InputMessage {
     FireWeapon,
     FireWeaponHeld,

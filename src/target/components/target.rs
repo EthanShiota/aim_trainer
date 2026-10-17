@@ -7,7 +7,7 @@ use crate::{AppState, SoundSettings};
 use bevy::prelude::*;
 use tracing::instrument;
 
-use crate::target::{TargetMaterial, TargetResource};
+use crate::target::{Active, TargetMaterial, TargetResource};
 
 // Marker component for targets
 #[derive(Component, Copy, Clone)]

@@ -17,9 +17,6 @@ const TAU: f32 = 6.28318530718;
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    // if hovered == 1 {
-    //   return vec4(1.,1.,1.,1.);
-    // }
     // 1. Prepare Your Input Data
     // The data arriving in the `in` struct has been smoothly interpolated
     // across the triangle's surface by the rasterizer. However, this
@@ -54,7 +51,11 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // return vec4<f32>(color, 1.0) 
     //
     let color_ring = vec4f(normalize(color.xyz) * modifier, 0.0);
-    let final_color = vec4<f32>(0.0, 0.0, 0.0, modifier) + color_ring + rimlight * color;
+    var final_color = vec4<f32>(0.0, 0.0, 0.0, modifier) + color_ring + rimlight * color;
+    if hovered == 1 {
+      return color;
+
+    }
     return final_color;
 }
 
