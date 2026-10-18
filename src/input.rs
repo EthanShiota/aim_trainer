@@ -13,17 +13,18 @@ pub enum InputMessage {
     FireWeaponHeld,
 }
 
+#[derive(SystemSet, Hash, Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
+pub struct InputSet;
+
 pub struct GameInputPlugin;
 impl Plugin for GameInputPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<InputMessage>()
             .add_systems(
                 PreUpdate,
-                handle_fire_input.run_if(in_state(GameState::Playing)),
-            )
-            .add_systems(
-                PreUpdate,
-                update_raycast.run_if(in_state(GameState::Playing)),
+                (update_raycast, handle_fire_input)
+                    .in_set(InputSet)
+                    .distributive_run_if(in_state(GameState::Playing)),
             )
             .add_systems(PostUpdate, remove_hovered.after(AnimationSystems));
     }

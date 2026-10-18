@@ -46,7 +46,12 @@ impl Plugin for TargetPlugin {
             .add_plugins(TimingRingPlugin)
             // Order matters because cull_active removes if the input is not held which is true when
             // active is inserted
-            .add_systems(Update, (cull_active, add_effect, sync_effect).chain())
+            .add_systems(
+                PreUpdate,
+                (cull_active, add_effect, sync_effect)
+                    .chain_weak()
+                    .after(crate::input::InputSet),
+            )
             // INFO: Gizmo
             .insert_gizmo_config(
                 SpawnerGizmo,
@@ -138,11 +143,11 @@ fn add_effect(
     mut reader: MessageReader<InputMessage>,
 ) {
     let mut hovered = hovered.into_iter().sort_by_key::<&Marker, _>(|m| m.time());
+    let Some(mut target) = hovered.next() else {
+        return;
+    };
 
     for msg in reader.read() {
-        let Some(mut target) = hovered.next() else {
-            continue;
-        };
         if let InputMessage::FireWeapon = msg
             && q_curve.contains(target.0)
         {
