@@ -13,16 +13,19 @@ use bevy::{
         tailwind,
     },
     feathers::{
-        FeathersCorePlugin, font_styles,
+        FeathersCorePlugin,
+        controls::FeathersButton,
+        font_styles,
         theme::{
             self, InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor,
             ThemeTextColor, ThemedText,
         },
-        tokens,
+        tokens::{self, BUTTON_TEXT, MENU_BG, MENU_BORDER},
     },
     input::common_conditions::input_just_pressed,
     input_focus::{AutoFocus, InputFocus, pointer_focus::PointerFocusPlugin},
     math::AspectRatio,
+    picking::hover::Hovered,
     prelude::*,
     render::render_resource::BlendState,
     settings::SaveSettings,
@@ -69,45 +72,63 @@ fn settings_item_submit(mut focus: ResMut<InputFocus>, settings_item: Query<&Edi
         focus.clear();
     }
 }
-
+fn button(text: &str) -> impl Scene {
+    bsn! {
+        @ui::card(true)
+        Node {
+            width: percent(100.),
+            height: percent(50.),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            justify_items: JustifyItems::Center
+        }
+        ThemeBackgroundColor(tokens::BUTTON_BG)
+        on(|e: On<PointerOver>, mut commands: Commands| {
+            commands.entity(e.event_target()).insert(ThemeBackgroundColor(tokens::BUTTON_BG_HOVER));
+        })
+        on(|e: On<PointerOut>, mut commands: Commands| {
+            commands.entity(e.event_target()).insert(ThemeBackgroundColor(tokens::BUTTON_BG));
+        })
+        Children [
+            Node {justify_content: JustifyContent::Center}
+            ThemedText
+            Text(text)
+        ]
+    }
+}
 pub fn pause_menu() -> impl Scene {
     bsn! {
         Node {
-            display: Display::Flex, justify_content: JustifyContent::Center, align_items: AlignItems::Center, width: percent(100.), height: percent(100.)
+            display: Display::Flex,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            width: percent(100.),
+            height: percent(100.)
         }
         DespawnOnExit::<GameState>(GameState::Paused)
         Children [
             @crosshair_settings()
             --
             Node {
-                 flex_direction: FlexDirection::Column width: percent(20.),
-                 height: percent(20.),
+                 flex_direction: FlexDirection::Column,
+                 width: ui::space(64.),
+                 height: ui::space(48.),
                  align_items: AlignItems::Center,
                  justify_content: JustifyContent::SpaceBetween,
-                 border: px(4.)
+                 border: ui::space(2.),
             }
-            Node { flex_direction: FlexDirection::Column, width: percent(20.), height: percent(20.), align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween, border: px(4.)}
-            BorderColor::all(css::BLACK)
+            ThemeBorderColor(MENU_BORDER)
+            ThemeBackgroundColor(MENU_BG)
             Children [
-                    Node {width: percent(100.), height: percent(50.), align_items: AlignItems::Center, justify_content: JustifyContent::Center, justify_items: JustifyItems::Center}
-                    BackgroundColor(css::BLACK)
+                    @button("Exit")
                     on(|_: On<PointerPress>, mut commands: Commands| {
                         commands.set_state(GameState::Playing);
                     })
-                    Children [
-                        Node {justify_content: JustifyContent::Center}
-                        Text::new("Exit")
-                    ]
                     --
-                    Node {width: percent(100.), height: percent(50.), align_items: AlignItems::Center, justify_content: JustifyContent::Center}
-                    BackgroundColor(css::BLACK)
+                    @button("Menu")
                     on(|_: On<PointerPress>, mut commands: Commands| {
                         commands.set_state(AppState::Menu);
                     })
-                    Children [
-                        Node {justify_content: JustifyContent::Center}
-                        Text::new("Main Menu")
-                    ]
             ]
         ]
     }

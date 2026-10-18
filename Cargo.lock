@@ -147,6 +147,7 @@ dependencies = [
  "rfd",
  "rodio",
  "tracing",
+ "ui",
  "zip",
 ]
 

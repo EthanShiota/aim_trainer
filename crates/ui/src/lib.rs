@@ -1,7 +1,7 @@
 use bevy::{
     color::palettes::tailwind,
     feathers::{
-        FeathersCorePlugin,
+        FeathersCorePlugin, FeathersPlugins,
         theme::{ThemeProps, ThemeToken, UiTheme},
         tokens,
     },
@@ -19,7 +19,7 @@ impl Plugin for UiPlugin {
             Update,
             settings_item_submit.run_if(input_just_pressed(KeyCode::Enter)),
         )
-        .add_plugins(FeathersCorePlugin);
+        .add_plugins(FeathersPlugins);
     }
 }
 

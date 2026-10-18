@@ -24,6 +24,7 @@ use bevy::settings::SaveSettingsDeferred;
 use parser::BeatMapOsu;
 
 use bevy::text::TextEditChange;
+use ui::space;
 
 use crate::{Crosshair, crosshair::CrosshairMaterial};
 
@@ -38,6 +39,16 @@ pub fn theme() -> UiTheme {
         tokens::semantic::TEXT_DEFAULT,
         Color::Srgba(tailwind::GREEN_200),
     );
+    base.semantic_base.insert(
+        tokens::semantic::TEXT_ON_ACCENT,
+        Color::Srgba(tailwind::GREEN_300),
+    );
+
+    base.semantic_base.insert(
+        tokens::semantic::SURFACE_MENU,
+        Color::Srgba(tailwind::SLATE_800),
+    );
+
     UiTheme(base)
 }
 pub fn container() -> impl Scene {
@@ -95,12 +106,13 @@ pub fn settings_item<
 ) -> impl Scene {
     bsn! {
         Node {
-            border: px(4.),
+            border: UiRect::bottom(space(0.5)),
             display: Display::Flex,
             flex_direction: FlexDirection::Row,
             justify_content: JustifyContent::SpaceBetween,
             width: percent(100.),
         }
+        ThemeBorderColor(tokens::MENU_BORDER)
         InheritableThemeTextColor(tokens::BUTTON_TEXT)
         Children [
             Text(label)
@@ -133,7 +145,10 @@ pub fn crosshair_settings() -> impl Scene {
             display: Display::Flex,
             flex_direction: FlexDirection::Column
         }
-        ThemeBackgroundColor(tokens::WINDOW_BG)
+        @ui::card(true)
+        ThemeBackgroundColor(tokens::MENU_BG)
+        ThemeTextColor(tokens::MENUITEM_TEXT)
+        ThemeBorderColor(tokens::MENU_BORDER)
         Children [
             @{settings_item_crosshair!("Dot Size: ", f32 => dot_radius)}
             --
@@ -149,8 +164,14 @@ pub fn crosshair_settings() -> impl Scene {
             --
             Node {
                 width: percent(100.),
-                aspect_ratio: 1f32
+                height: px(300.),
+                display: Display::Flex,
+                padding: px(0.),
+                flex_direction: FlexDirection::Row,
+                justify_content: JustifyContent::Center
             }
+            ThemeBorderColor(tokens::MENU_BORDER)
+            @ui::card(true)
             template(|ctx| {
                 Ok(MaterialNode(ctx.resource::<Crosshair>().0.clone()))
             })
