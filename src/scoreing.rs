@@ -128,6 +128,8 @@ impl SliderScorer {
     }
 }
 
+/// Lifetime component
+/// Used for scoring hits and triggering hit object despawn
 #[derive(Component, Clone, Default)]
 pub struct Lifetime(Timer);
 

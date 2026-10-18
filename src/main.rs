@@ -135,9 +135,11 @@ fn main() {
                     unapproved_path_mode: bevy::asset::UnapprovedPathMode::Deny,
                     ..default()
                 }),
-            FPSCameraPlugin,
             FrameTimeDiagnosticsPlugin::default(),
             // DiagnosticsOverlayPlugin,
+        ))
+        .add_plugins((
+            FPSCameraPlugin,
             EguiPlugin::default(),
             edit_mode::EditPlugin,
             menus::MenuPlugin,
