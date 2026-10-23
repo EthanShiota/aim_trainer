@@ -6,6 +6,7 @@ import bevy_pbr::render::{
 };
 import bevy_render::view::direction_view_to_world;
 import bevy_render::maths;
+import bevy_render::maths::PI;
 
 const TAU: f32 = 6.28318530718;
 

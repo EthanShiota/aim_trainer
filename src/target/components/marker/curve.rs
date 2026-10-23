@@ -104,6 +104,9 @@ fn change_slider_color(
     let next_color_t = mat.t + (mat.slides as f32).recip();
     mat.before_color = mat.after_color;
     mat.after_color = mat.color.sample_clamped(next_color_t).into();
+    if next_color_t >= 1. {
+        mat.after_color.alpha = 0.;
+    }
 }
 
 #[derive(Component)]
@@ -199,19 +202,18 @@ fn on_spawn_hint(
         |f| f,
     );
     let mesh = create_curve_mesh(mesh_curve, gameplay_settings.target_scale * 1.5);
+    let base_color: Oklaba = target_resource.color().into();
+    let revealed_color = base_color.lighter(0.3).with_alpha(0.);
     let hint_color: ColorCurve<Oklaba> =
-        ColorCurve::new([DARK_BLUE.into(), LIGHT_BLUE.into()]).unwrap();
+        ColorCurve::new([base_color.into(), revealed_color.into()]).unwrap();
     let hint = commands
         .spawn_scene(bsn! {
             Name("Curve Path")
             Mesh3d(asset_value(mesh))
-            // Transform {
-            //     translation: vec3(0.,0.,-50.)
-            // }
             DespawnOnExit::<AppState>(AppState::InGame)
             MeshMaterial3d<CurveMarkerMaterial>(asset_value(CurveMarkerMaterial {
-                before_color: hint_color.sample_unchecked(0.0).into(),
-                after_color: hint_color.sample_unchecked((curve_marker.slides as f32).recip()).into(),
+                before_color: base_color.into(),
+                after_color: hint_color.sample_clamped((curve_marker.slides as f32).recip()).into(),
                 t: 0.0,
                 slides: curve_marker.slides as u32,
                 color: hint_color,
@@ -272,7 +274,7 @@ fn on_spawn_hint(
     let mut slider = commands
         .entity(entity)
         .apply_scene(bsn! {
-            @{target_resource.target_scene()}
+            @{target_resource.target_scene(base_color.into())}
             Transform {
                 translation: {curve_marker.curve.sample_unchecked(0.)}
             }

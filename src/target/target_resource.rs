@@ -14,15 +14,20 @@ pub struct TargetResource {
 }
 
 impl TargetResource {
-    pub fn target_scene(&mut self) -> impl Scene {
+    pub fn target_scene(&mut self, color: LinearRgba) -> impl Scene {
         bsn! {
             DespawnOnExit<AppState>(AppState::InGame)
             Mesh3d({self.mesh.clone()})
             MeshMaterial3d<TargetMaterial>(asset_value(TargetMaterial {
-                color: self.color_curve.lock().unwrap().next().unwrap(),
                 ring: self.ring_start,
+                color,
                 ..default()
             }))
         }
+    }
+
+    // Get a cycling color
+    pub fn color(&mut self) -> LinearRgba {
+        self.color_curve.lock().unwrap().next().unwrap()
     }
 }

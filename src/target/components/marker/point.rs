@@ -32,13 +32,13 @@ pub fn on_spawn_hint(
     // spawn target
 
     let miss_duration = Duration::from_millis(400);
-
+    let base_color = target_resource.color();
     // Spawn Target
     let _target = commands
         .entity(entity)
         .apply_scene(bsn! {
             target::FadeIn({Timer::new(preempt,TimerMode::Once)})
-            @{target_resource.target_scene()}
+            @{target_resource.target_scene(base_color)}
             // Mesh3d({target_resource.mesh.clone()})
             // MeshMaterial3d::<TargetMaterial>(asset_value(mat))
             spawn_location
