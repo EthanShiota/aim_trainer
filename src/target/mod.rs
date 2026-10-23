@@ -20,7 +20,7 @@ pub struct DebugMode(pub bool);
 mod target_resource;
 pub use target_resource::TargetResource;
 
-use crate::{AppState, input::InputMessage};
+use crate::{AppState, GameplaySettings, input::InputMessage};
 
 pub struct TargetPlugin;
 

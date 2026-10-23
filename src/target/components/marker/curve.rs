@@ -20,7 +20,6 @@ use bevy::{
     prelude::*,
 };
 
-use crate::SoundSettings;
 use crate::input::Hovered;
 use crate::scoreing::{LifetimeEvent, Score, SliderScorer};
 use crate::target::Active;
@@ -34,6 +33,7 @@ use crate::{
         target_material::TargetMaterial,
     },
 };
+use crate::{GameplaySettings, SoundSettings};
 
 pub struct CurvePlugin;
 impl Plugin for CurvePlugin {
@@ -176,6 +176,7 @@ fn on_spawn_hint(
     mut animation_clips: ResMut<Assets<AnimationClip>>,
     mut animation_graphs: ResMut<Assets<AnimationGraph>>,
     mut target_resource: ResMut<TargetResource>,
+    gameplay_settings: Res<GameplaySettings>,
     asset_server: ResMut<AssetServer>,
     time: Res<Time<Virtual>>,
     beat_map: If<Res<BeatMapResource>>,
@@ -197,7 +198,7 @@ fn on_spawn_hint(
         .unwrap(),
         |f| f,
     );
-    let mesh = create_curve_mesh(mesh_curve);
+    let mesh = create_curve_mesh(mesh_curve, gameplay_settings.target_scale * 1.5);
     let hint_color: ColorCurve<Oklaba> =
         ColorCurve::new([DARK_BLUE.into(), LIGHT_BLUE.into()]).unwrap();
     let hint = commands
@@ -468,10 +469,9 @@ macro_rules! debug_mesh {
     };
 }
 
-fn create_curve_mesh(curve: impl Curve<Vec3> + Clone) -> Mesh {
+fn create_curve_mesh(curve: impl Curve<Vec3> + Clone, radius: f32) -> Mesh {
     let now = std::time::Instant::now();
     let resolution = 32;
-    let radius = 1.5;
 
     let segments = generate_curve_info(curve);
 

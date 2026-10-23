@@ -41,8 +41,8 @@ use rfd::FileDialog;
 use zip::{ZipArchive, result::ZipError};
 
 use crate::{
-    AppState, GameSettings, GameState, SoundSettings, menus::components::container, scenarios,
-    scoreing::Score,
+    AppState, GameSettings, GameState, GameplaySettings, SoundSettings,
+    menus::components::container, scenarios, scoreing::Score,
 };
 
 use components::crosshair_settings;
@@ -137,6 +137,7 @@ pub fn pause_menu() -> impl Scene {
 fn settings_window(
     mut contexts: EguiContexts,
     mut settings: If<ResMut<GameSettings>>,
+    mut gameplay_settings: If<ResMut<GameplaySettings>>,
     mut sound_settings: If<ResMut<SoundSettings>>,
     mut confirm: Local<bool>,
     window: Single<&Window, With<PrimaryWindow>>,
@@ -170,6 +171,12 @@ fn settings_window(
                     .text("Vertical FOV in radians")
                     .step_by(0.0),
             );
+
+            ui.add(
+                egui::Slider::new(&mut gameplay_settings.target_scale, 0.0..=2.0)
+                    .text("Target Scale"),
+            );
+
             let a: AspectRatio =
                 AspectRatio::try_from(window.size()).unwrap_or(AspectRatio::SIXTEEN_NINE);
             ui.label(format!(

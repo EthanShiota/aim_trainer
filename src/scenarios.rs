@@ -18,8 +18,12 @@ use std::{
 };
 use tracing::{Level, event, instrument};
 
+trait OsuPixelTransform {
+    fn to_world(self, Vec2) -> Vec3;
+}
+
 use crate::{
-    AudioBuffer, EditMode,
+    AudioBuffer, EditMode, GameplaySettings,
     scoreing::Score,
     target::{self, BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
 };
@@ -127,6 +131,7 @@ fn circle_center(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
 }
 pub fn osu(
     In(osu_beat_map): In<BeatMapOsu>,
+    gameplay_settings: Res<GameplaySettings>,
     mut target_resource: ResMut<TargetResource>,
     mut commands: Commands,
     mut audio: ResMut<Assets<AudioBuffer>>,
@@ -253,7 +258,9 @@ pub fn osu(
     // TODO: Leadin
     let leadin = Duration::from_millis(osu_beat_map.general.audio_lead_in as u64);
 
-    target_resource.mesh = meshes.add(Sphere::new(osu_beat_map.difficulty.circle_size));
+    target_resource.mesh = meshes.add(Sphere::new(
+        osu_beat_map.difficulty.circle_size * gameplay_settings.target_scale,
+    ));
     let beat_map = BeatMap {
         song: audio.add(AudioBuffer(audio_buffer)),
         target_curves,

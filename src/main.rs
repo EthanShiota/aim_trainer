@@ -101,6 +101,23 @@ impl Default for CrosshairSettings {
     }
 }
 
+#[derive(Resource, Clone, SettingsGroup, Reflect)]
+#[reflect(Resource, SettingsGroup, Default)]
+#[settings_group(group = "gameplay")]
+pub struct GameplaySettings {
+    target_scale: f32,
+    target_distance: f32,
+}
+
+impl Default for GameplaySettings {
+    fn default() -> Self {
+        Self {
+            target_scale: 1.0,
+            target_distance: 50.,
+        }
+    }
+}
+
 #[derive(Hash, Eq, PartialEq, Clone, Reflect)]
 pub enum GameAction {
     FireWeapon,
@@ -149,6 +166,7 @@ fn main() {
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()
+        .init_resource::<GameplaySettings>()
         .add_plugins(UiMaterialPlugin::<CrosshairMaterial>::default())
         // INFO: State
         .insert_state(AppState::Menu)
