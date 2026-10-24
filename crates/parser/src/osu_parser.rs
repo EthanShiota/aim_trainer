@@ -180,7 +180,7 @@ pub struct Difficulty {
     pub slider_tick_rate: f32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TimingPoint {
     // INFO: time in milliseconds for some reason this is a decimal and not a integer
     pub time: f32,

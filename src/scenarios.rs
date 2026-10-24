@@ -5,7 +5,7 @@ use bevy::{
     math::{NormedVectorSpace, VectorSpace},
     prelude::*,
 };
-use bevy_egui::egui::os;
+use bevy_egui::egui::{emath::Float, os};
 use rodio::Source;
 use std::{
     f32::{self, consts::TAU},
@@ -293,9 +293,10 @@ pub fn osu(
             let guard = span.enter();
             let t = hit_obj.time;
 
-            while t > (state.previous_timing_point as usize)
-                && let Some(next_timing_point) = state.timing_point_iter.peek()
-                && t >= next_timing_point.time as usize
+            while t >= (state.previous_timing_point as usize)
+                && let Some(next_timing_point) = state
+                    .timing_point_iter
+                    .next_if(|next_timing_point| t >= next_timing_point.time as usize)
             {
                 // apply next timing point
                 if next_timing_point.uninherited {
@@ -310,7 +311,6 @@ pub fn osu(
                     );
                 }
                 state.previous_timing_point = next_timing_point.time;
-                state.timing_point_iter.next();
             }
             let ar = osu_beat_map.difficulty.approach_rate;
 
