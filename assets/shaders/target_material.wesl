@@ -6,15 +6,16 @@ import bevy_pbr::render::{
 };
 import bevy_render::view::direction_view_to_world;
 import bevy_render::maths;
-import bevy_render::maths::PI;
+import bevy_render::maths::{PI, project_onto};
 
 const TAU: f32 = 6.28318530718;
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> color: vec4<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(101) var<uniform> ring: f32;
 @group(constants::MATERIAL_BIND_GROUP) @binding(102) var<uniform> ring_width: f32;
-@group(constants::MATERIAL_BIND_GROUP) @binding(103) var<uniform> hovered: i32;
-@group(constants::MATERIAL_BIND_GROUP) @binding(104) var<uniform> priority: u32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(103) var<uniform> hovered: u32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(104) var<uniform> ready: u32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(105) var<uniform> priority: u32;
 
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment
@@ -52,15 +53,44 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // and adding a fixed alpha component of 1.0 for full opacity.
     // return vec4<f32>(color, 1.0) 
 
-    if priority == 0 {
-      modifier = step(ring_lower, obj_angle) - step(ring_upper, obj_angle);
+    //if priority == 0 {
+    //  modifier = step(ring_lower, obj_angle) - step(ring_upper, obj_angle);
+    //}
+
+    if ready == 1 {
+      let dv = project_onto(normal, obj_vector) - normal;
+      let st = vec2f(atan2(dv.x, dv.y),obj_angle);
+        modifier *= ready_highlight(st) + 0.1;
     }
     let color_ring = vec4f(normalize(color.xyz) * modifier, 0.0);
     var final_color = vec4<f32>(0.0, 0.0, 0.0, modifier) + color_ring + rimlight * vec4f(color.rgb,0.0);
-    if hovered == 1 {
-      return color;
-    }
+    //if hovered == 1 {
+    //  return color;
+    //}
     
     return final_color;
 }
 
+fn ready_highlight(uv: vec2f) -> f32 {
+    var p = uv;
+    
+    let start = 0.0;
+    let end = PI/2.;
+    var st = ((p.y - start) /(end - start));
+    let mask = 0.6;
+    if st > mask {
+        return 1.;
+    }
+    st = st/(1.-(mask-.2));
+    let f = (sin(p.x * 7. + globals.time *20. + st*9.)+1.) / 2.;
+    if abs(f - st) < 0.4 {
+        return 1.;
+    } else {
+        return 0.;
+    }
+    var color = (sin(p.x * 40. + globals.time * 10.)+1.) / 2.;
+    
+    color *= (1. - step(end, p.y));
+    color *= step(start, p.y);
+    return color;
+}

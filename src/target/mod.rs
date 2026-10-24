@@ -129,6 +129,7 @@ fn setup_plugin(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 pub struct Active;
 
 fn add_effect(
+    target_resource: Res<TargetResource>,
     hovered: Query<
         (
             Entity,
@@ -142,7 +143,7 @@ fn add_effect(
     mut commands: Commands,
     mut reader: MessageReader<InputMessage>,
 ) {
-    let mut hovered = hovered.into_iter().sort_by_key::<&Marker, _>(|m| m.time());
+    let mut hovered = hovered.into_iter().sort::<&Marker>();
     let Some(mut target) = hovered.next() else {
         return;
     };

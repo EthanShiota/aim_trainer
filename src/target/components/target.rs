@@ -50,6 +50,7 @@ pub fn tick(
                 fade_in.0.tick(dt);
                 if fade_in.0.is_finished() {
                     m.ring_width = 2.;
+                    m.ready = 1;
                     commands.entity(entity).try_remove::<FadeIn>();
                 }
                 m.ring = (1. - ease) * target_resource.ring_start + ease * target_resource.ring_end;

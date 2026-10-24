@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{
     color::palettes::{
         css::BLUE_VIOLET,
@@ -18,8 +20,10 @@ pub struct TargetMaterial {
     #[uniform(102)]
     pub ring_width: f32,
     #[uniform(103)]
-    pub hovered: i32,
+    pub hovered: u32,
     #[uniform(104)]
+    pub ready: u32, // indicates target is ready to hit
+    #[uniform(105)]
     pub priority: u32,
 }
 
@@ -39,6 +43,7 @@ impl Default for TargetMaterial {
     fn default() -> Self {
         TargetMaterial {
             hovered: 0,
+            ready: 0,
             ring: 0.1,
             ring_width: 0.1,
             color: GREEN_300.into(),
