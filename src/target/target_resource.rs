@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use bevy::{color::palettes::tailwind::GREEN_300, prelude::*};
+use bevy::prelude::*;
 
 use crate::{AppState, target::TargetMaterial};
 #[derive(Resource)]

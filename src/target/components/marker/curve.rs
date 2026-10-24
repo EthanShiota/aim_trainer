@@ -1,4 +1,5 @@
 #![allow(unused)]
+use bevy::camera::visibility::RenderLayers;
 use bevy::color::ColorCurve;
 use bevy::color::palettes::css::{DARK_BLUE, LIGHT_BLUE, RED, TURQUOISE};
 use bevy::color::palettes::tailwind::{RED_900, VIOLET_400};
@@ -50,7 +51,7 @@ impl Plugin for CurvePlugin {
         .insert_gizmo_config(
             CurveGizmo,
             GizmoConfig {
-                render_layers: bevy::camera::visibility::RenderLayers::layer(1),
+                render_layers: bevy::camera::visibility::RenderLayers::layer(0),
                 ..default()
             },
         )
@@ -59,19 +60,20 @@ impl Plugin for CurvePlugin {
     }
 }
 
-#[derive(AsBindGroup, Clone, Asset, TypePath)]
+#[derive(AsBindGroup, Clone, Asset, TypePath, Debug)]
 pub struct CurveMarkerMaterial {
     #[uniform(0)]
     before_color: LinearRgba,
-    // [0,1] -> indicate slider progress
+
     #[uniform(1)]
+    after_color: LinearRgba,
+
+    // [0,1] -> indicate slider progress
+    #[uniform(2)]
     t: f32,
 
-    #[uniform(2)]
-    slides: u32,
-
     #[uniform(3)]
-    after_color: LinearRgba,
+    slides: u32,
 
     color: ColorCurve<Oklaba>,
 
@@ -92,6 +94,7 @@ fn tick_curve_material(
     }
 }
 
+#[instrument(skip_all)]
 fn change_slider_color(
     e: On<SliderRepeat>,
     mut materials: ResMut<Assets<CurveMarkerMaterial>>,
@@ -101,6 +104,7 @@ fn change_slider_color(
     let parent = q_parent.get(e.0).unwrap();
     let handle = q_handle.get(parent.parent()).unwrap().id();
     let mut mat = materials.get_mut(handle).unwrap();
+    debug!(material = ?*mat);
     let next_color_t = mat.t + (mat.slides as f32).recip();
     mat.before_color = mat.after_color;
     mat.after_color = mat.color.sample_clamped(next_color_t).into();
@@ -118,6 +122,9 @@ impl Material for CurveMarkerMaterial {
     }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Blend
+    }
+    fn enable_shadows() -> bool {
+        false
     }
 }
 
@@ -204,8 +211,7 @@ fn on_spawn_hint(
     let mesh = create_curve_mesh(mesh_curve, gameplay_settings.target_scale * 1.5);
     let base_color: Oklaba = target_resource.color().into();
     let revealed_color = base_color.lighter(0.3).with_alpha(0.);
-    let hint_color: ColorCurve<Oklaba> =
-        ColorCurve::new([base_color.into(), revealed_color.into()]).unwrap();
+    let hint_color: ColorCurve<Oklaba> = ColorCurve::new([base_color, revealed_color]).unwrap();
     let hint = commands
         .spawn_scene(bsn! {
             Name("Curve Path")
@@ -318,7 +324,6 @@ fn on_spawn_hint(
                                 // Valid hit
                             }
                             info => {
-                                debug!("Miss with: {info}");
                                 score.score_hit(0);
                                 // TODO: Indicate miss
                                 commands.entity(hint).despawn();

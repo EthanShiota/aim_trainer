@@ -19,12 +19,17 @@ impl Plugin for EffectPlugin {
     }
 }
 
-#[instrument]
-pub fn hit_sound(effects_volume: f32) -> impl Scene {
+pub fn hit_effect(points: f64, transform: &Transform) -> impl Scene {}
+
+pub fn hit_sound(sound_settings: Res<SoundSettings>) -> impl Scene {
     bsn! {
-        AudioPlayer("audio/Creams.ogg")
+        AudioPlayer(
+            {
+                if let Some(sfx) = sound_settings.sfx_override.clone() {sfx} else {"audio/Creams.ogg".to_string()}
+            }
+        )
         PlaybackSettings {
-            volume: bevy::audio::Volume::Linear(effects_volume),
+            volume: bevy::audio::Volume::Linear({sound_settings.effects_volume}),
             mode: bevy::audio::PlaybackMode::Remove
         }
         DespawnOnExit::<AppState>(AppState::InGame)
@@ -53,7 +58,7 @@ pub fn on_slider_head(
 ) {
     if let Ok(mut scorer) = active.get_mut(e.0) {
         scorer.hits += 1;
-        commands.spawn_scene(hit_sound(sound_settings.effects_volume));
+        commands.spawn_scene(hit_sound(sound_settings));
     }
 }
 
@@ -71,7 +76,7 @@ pub fn on_slider_tail(
     if active.contains(e.0) {
         scoerer.hits += 1;
         score.points += 30.;
-        commands.spawn_scene(hit_sound(sound_settings.effects_volume));
+        commands.spawn_scene(hit_sound(sound_settings));
     }
     score.score_hit(scoerer.score());
     commands.entity(e.0).trigger(RemoveCurve);
@@ -88,6 +93,6 @@ pub fn on_slider_repeat(
     if let Ok(mut scorer) = active.get_mut(e.0) {
         scorer.hits += 1;
         score.points += 30.;
-        commands.spawn_scene(hit_sound(sound_settings.effects_volume));
+        commands.spawn_scene(hit_sound(sound_settings));
     }
 }

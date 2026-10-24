@@ -140,6 +140,7 @@ fn settings_window(
     mut gameplay_settings: If<ResMut<GameplaySettings>>,
     mut sound_settings: If<ResMut<SoundSettings>>,
     mut confirm: Local<bool>,
+    //mut sfx_override_buffer: Local<String>,
     window: Single<&Window, With<PrimaryWindow>>,
     mut commands: Commands,
 ) -> Result {
@@ -161,6 +162,15 @@ fn settings_window(
                 egui::Slider::new(&mut sound_settings.effects_volume, 0.0..=1.0)
                     .text("Effects Volume"),
             );
+            // let sfx_response = ui.add(egui::TextEdit::singleline(&mut *sfx_override_buffer));
+            // ui.label("Sfx Override, must be in assets directory");
+            //
+            // if sfx_response.changed()
+            //     && std::fs::exists(format!("assets/{}", *sfx_override_buffer)).unwrap_or(false)
+            // {
+            //     sound_settings.sfx_override = Some(sfx_override_buffer.clone());
+            // }
+
             ui.add(
                 egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0)
                     .text("Mouse Sensitivity"),

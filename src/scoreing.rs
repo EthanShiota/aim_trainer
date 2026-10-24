@@ -171,7 +171,7 @@ fn tick(
 ) {
     for (ent, mut lifetime) in q_lifetime.iter_mut() {
         lifetime.0.tick(time.delta());
-        if lifetime.0.is_finished() {
+        if lifetime.0.just_finished() {
             commands.entity(ent).trigger(LifetimeEvent);
         }
     }

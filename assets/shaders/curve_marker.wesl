@@ -13,14 +13,13 @@ const TAU: f32 = 6.28318530718;
 
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> before_color: vec4<f32>;
-@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> t0: f32;
-@group(constants::MATERIAL_BIND_GROUP) @binding(2) var<uniform> slides: u32;
-@group(constants::MATERIAL_BIND_GROUP) @binding(3) var<uniform> after_color: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> after_color: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var<uniform> t0: f32;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var<uniform> slides: u32;
 
 // (We assume the `VertexOutput` struct is defined and received as `in`)
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    
 
     let slide = t0 * f32(slides);
     let t = fract(slide);

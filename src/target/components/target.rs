@@ -63,11 +63,11 @@ pub fn tick(
 pub fn on_target_hit(
     e: On<TargetHit>,
     mut commands: Commands,
-    mut q_target: Query<(Entity, &mut Target)>,
+    mut q_target: Query<(Entity, &mut Target, &Transform)>,
     mut score: ResMut<Score>,
     q_lifetime: Query<&Lifetime>,
 ) {
-    if let Ok((ent, mut target)) = q_target.get_mut(e.event_target()) {
+    if let Ok((ent, mut target, transform)) = q_target.get_mut(e.event_target()) {
         // Update State
         let should_destroy = match target.as_mut() {
             Target::Counter(count) => {
@@ -76,6 +76,7 @@ pub fn on_target_hit(
                     debug_span!("target_hit").in_scope(|| {
                         let points = score.score_lifetime(lifetime) as f64;
                         debug!(points = points);
+                        commands.spawn_scene(crate::effects::hit_effect(points, transform));
                         score.points += points;
                     });
                 }
@@ -107,7 +108,7 @@ pub fn on_target_destroyed(
 ) {
     if let Ok(&t) = q_transform.get(e.event_target()) {
         commands.spawn_scene(bsn! {
-            @crate::effects::hit_sound(sound_settings.effects_volume)
+            @crate::effects::hit_sound(sound_settings)
             t
             DespawnOnExit::<AppState>(AppState::InGame)
         });

@@ -118,10 +118,7 @@ trait OsuPixelTransform {
     ) -> (TargetMarker, Marker, Transform) {
         (
             TargetMarker,
-            Marker::new(
-                Duration::from_millis(t as u64),
-                Duration::from_millis(preempt_ms as u64),
-            ),
+            Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
             Transform::from_translation(self.to_world(to_vec2(pos))),
         )
     }

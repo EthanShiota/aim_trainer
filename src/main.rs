@@ -9,14 +9,21 @@ mod target;
 
 use bevy::anti_alias::smaa::Smaa;
 use bevy::audio::AddAudioSource;
-use bevy::camera::Exposure;
 use bevy::camera::Projection::Perspective;
+use bevy::camera::{Exposure, Hdr};
+use bevy::core_pipeline::oit::{
+    OrderIndependentTransparencyPlugin, OrderIndependentTransparencySettings,
+};
 use bevy::core_pipeline::tonemapping::Tonemapping;
 
 use bevy::dev_tools::picking_debug::{DebugPickingMode, DebugPickingPlugin};
+use bevy::dev_tools::render_debug::{GlobalRenderDebugOverlay, RenderDebugOverlayKeybindings};
 use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
+use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
+use bevy::render::diagnostic::RenderDiagnosticsPlugin;
+use bevy::render::view::NoIndirectDrawing;
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy::ui_widgets::UiWidgetsPlugins;
 use bevy_egui::egui::Widget;
@@ -25,7 +32,7 @@ use std::hash::Hash;
 use std::time::Duration;
 use tracing::instrument;
 
-use bevy::camera::visibility::RenderLayers;
+use bevy::camera::visibility::{NoFrustumCulling, RenderLayers};
 use bevy::light::Skybox;
 use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
@@ -37,7 +44,9 @@ use crate::crosshair::CrosshairMaterial;
 use crate::input::{Hovered, InputMessage};
 use crate::scoreing::Score;
 use crate::target::events::{TargetDestroyed, TargetHit};
-use crate::target::{CurveMarker, Marker, Target, TargetMarker, TargetResource};
+use crate::target::{
+    CurveMarker, CurveMarkerMaterial, Marker, Target, TargetMarker, TargetResource,
+};
 use fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 
 #[derive(Resource, Clone, SettingsGroup, Reflect)]
@@ -75,6 +84,8 @@ impl Default for GameSettings {
 pub struct SoundSettings {
     pub music_volume: f32,
     pub effects_volume: f32,
+    // Path to audio asset
+    pub sfx_override: Option<String>,
 }
 
 impl Default for SoundSettings {
@@ -82,6 +93,7 @@ impl Default for SoundSettings {
         Self {
             music_volume: 1.0,
             effects_volume: 1.0,
+            sfx_override: None,
         }
     }
 }
@@ -301,10 +313,6 @@ fn global_bindings(
     if key_input.just_pressed(KeyCode::Comma) {
         commands.set_state(AppState::UiDebug);
     }
-
-    if key_input.just_pressed(KeyCode::Period) {
-        commands.set_state(AppState::ScoreSummery);
-    }
 }
 
 fn game_loop(
@@ -326,13 +334,26 @@ fn game_loop(
             GameState::Paused => commands.set_state(GameState::Playing),
         }
     }
+
+    if key_input.just_pressed(KeyCode::Period) {
+        commands.set_state(AppState::ScoreSummery);
+    }
 }
 
 fn debug_window(
     mut contexts: EguiContexts,
     target_resource: Option<ResMut<TargetResource>>,
-    q_targets: Query<(Entity, &Marker, Option<&CurveMarker>, Option<&TargetMarker>)>,
+    q_targets: Query<(
+        Entity,
+        &Marker,
+        Option<&CurveMarker>,
+        Option<&TargetMarker>,
+        Option<&ChildOf>,
+    )>,
+    curve_marker_mat: Res<Assets<CurveMarkerMaterial>>,
+    q_mat: Query<&MeshMaterial3d<CurveMarkerMaterial>>,
     mut commands: Commands,
+    time: Res<Time<Virtual>>,
     score: Option<Res<Score>>,
 ) -> Result {
     if let Some(mut target_resource) = target_resource {
@@ -358,7 +379,9 @@ fn debug_window(
         .scroll([false, true])
         .max_height(400.)
         .show(contexts.ctx_mut()?, |ui| -> Result {
-            for (entity, marker, curve, target) in q_targets.into_iter() {
+            ui.label(format!("Time: {:?}", time.elapsed()));
+            for (entity, marker, curve, target, _parent) in q_targets.into_iter().sort::<&Marker>()
+            {
                 let marker_type = match (curve, target) {
                     (Some(_), Some(_)) => return Err("Marker with both types".into()),
                     (Some(_), _) => "Curve",
@@ -369,6 +392,11 @@ fn debug_window(
                     .button(format!("{marker_type} Marker: {:?}", marker.time()))
                     .clicked()
                 {
+                    if let Some(p) = _parent {
+                        let mat = q_mat.get(p.parent()).unwrap();
+                        let mat = curve_marker_mat.get(mat.id()).unwrap();
+                        debug!(?mat);
+                    }
                     commands.entity(entity).log_components();
                 }
             }
@@ -496,7 +524,6 @@ fn light_and_cameras(
 
     commands.spawn((
         Camera3d::default(),
-        RenderLayers::from_layers(&[0, 1]),
         Camera {
             is_active: true,
             ..default()
@@ -518,10 +545,9 @@ fn light_and_cameras(
                 ..default()
             },
             Bloom::NATURAL,
-            Tonemapping::AgX,
+            Tonemapping::Linear,
             Exposure { ev100: 8. },
             Msaa::Off,
-            Smaa::default(),
         ),
         Transform::from_xyz(0., 5., 0.),
         PlayerCamera,

@@ -13,7 +13,7 @@ use crate::{
 mod curve;
 mod point;
 
-pub use curve::CurveMarker;
+pub use curve::{CurveMarker, CurveMarkerMaterial};
 pub use point::TargetMarker;
 
 pub struct MarkerPlugin;
@@ -80,7 +80,8 @@ impl Debug for Marker {
 }
 
 pub fn tick(
-    q_marker: Query<(Entity, &Marker)>,
+    // Query marker that are not spawned
+    q_marker: Query<(Entity, &Marker), Without<Mesh3d>>,
     q_sink: Query<&AudioSink, With<AudioPlayer<AudioBuffer>>>,
     mut beat_map: If<ResMut<BeatMapResource>>,
     mut commands: Commands,
@@ -88,15 +89,19 @@ pub fn tick(
     let Ok(sink) = q_sink.get(beat_map.music_player) else {
         return;
     };
+    let pos = sink.position();
     for (entity, marker) in q_marker.iter() {
-        if (beat_map.scene_timer..=sink.position()).contains(&marker.preempt) {
+        if (beat_map.scene_timer..=pos).contains(&marker.preempt) {
             commands.entity(entity).trigger(SpawnHint);
+            commands.entity(entity).observe(move |_: On<SpawnHint>| {
+                error!("spawn hint should only trigger once!");
+            });
         }
         if (beat_map.scene_timer..=sink.position()).contains(&marker.spawn_time) {
             // commands.entity(entity).trigger(SpawnTarget);
         }
     }
-    beat_map.scene_timer = sink.position();
+    beat_map.scene_timer = pos;
     if sink.empty() {
         commands.set_state(AppState::ScoreSummery);
     }

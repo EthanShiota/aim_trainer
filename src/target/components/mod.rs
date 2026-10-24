@@ -5,7 +5,7 @@ mod spawner_volume;
 pub mod target;
 mod timing_ring;
 pub use beat_map::BeatMap;
-pub use marker::{CurveMarker, Marker, MarkerPlugin, TargetMarker};
+pub use marker::{CurveMarker, CurveMarkerMaterial, Marker, MarkerPlugin, TargetMarker};
 pub use spawner::*;
 pub use spawner_volume::*;
 pub use target::{Target, on_target_destroyed, on_target_hit};

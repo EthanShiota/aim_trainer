@@ -10,10 +10,11 @@ edition = "2024"
 
 [workspace.dependencies]
 bevy = { version = "0.20.0", features = [
-  "multi_threaded",
   "mesh_picking",
   "file_watcher",
   "debug",
+  "default",
+  "dev",
   "bevy_dev_tools",
   "bevy_ui",
   "bevy_settings",
