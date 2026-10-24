@@ -68,7 +68,8 @@ fn update_raycast(
         let filter = |entity| q_target.contains(entity);
         let settings = MeshRayCastSettings::default()
             .with_filter(&filter)
-            .with_visibility(Visible);
+            .with_visibility(Visible)
+            .never_early_exit();
 
         let results = ray_cast.cast_ray(ray, &settings);
 
