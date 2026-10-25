@@ -26,19 +26,17 @@ use tracing::{Level, event, instrument};
 
 trait OsuPixelTransform {
     fn to_world(&self, point: Vec2) -> Vec3;
-    fn create_curve_marker(
-        &self,
-        curve_type: &parser::CurveType,
-        points: &[Vec2],
-        slider_multiplier: f32,
-        curve_duration: f32,
-        preempt_ms: u64,
-        t: u64,
-        slides: usize,
-        num_ticks: f32,
-        // Length in osu px
-        length: f32,
-    ) -> (CurveMarker, Marker) {
+    fn create_curve_marker(&self, params: CurveMarkerParams) -> (CurveMarker, Marker) {
+        let CurveMarkerParams {
+            curve_type,
+            points,
+            curve_duration,
+            preempt_ms,
+            time: t,
+            slides,
+            num_ticks,
+            length,
+        } = params;
         let curve_marker = match curve_type {
             parser::CurveType::Bezier => {
                 let curve = loop_curve(
@@ -76,7 +74,15 @@ trait OsuPixelTransform {
 
                 // calculate curve length in osu! px to calculate what percent we need to show
                 let osu_px_points: Vec<Vec2> = points.to_vec();
-                let center = circle_center(osu_px_points[0], osu_px_points[1], osu_px_points[2]);
+                let Some(center) =
+                    circle_center(osu_px_points[0], osu_px_points[1], osu_px_points[2])
+                else {
+                    let params = CurveMarkerParams {
+                        curve_type: &parser::CurveType::Linear,
+                        ..params
+                    };
+                    return self.create_curve_marker(params);
+                };
                 let radius = center.distance(osu_px_points[0]);
 
                 let circumference = f32::consts::TAU * radius;
@@ -88,7 +94,8 @@ trait OsuPixelTransform {
                 // HACK: Get z from conversion function for later use
                 let z = self.to_world(vec2(0., 0.)).z;
 
-                let center = circle_center(points[0], points[1], points[2]);
+                let center = circle_center(points[0], points[1], points[2])
+                    .expect("transformation from osu px to world broke circle invariant");
                 let radius = center.distance(points[0]);
                 let v = points[2] - center;
 
@@ -194,11 +201,6 @@ pub fn debug_scene(In(osu): In<BeatMapOsu>, mut commands: Commands) {
         vec2(269., 67.),
     ];
     let curve = points_to_bezier(&points);
-    // commands.spawn_scene(bsn! {
-    //     MeshMaterial3d::<StandardMaterial>(asset_value(StandardMaterial::from_color(RED)))
-    //     Mesh3d(asset_value(Polyline3d::new(curve)))
-    //
-    // });
 }
 
 struct BeatMapDecoderState {
@@ -250,16 +252,19 @@ impl OsuPixelTransform for RectangularTransform {
     }
 }
 
-// fn convert_osu_pixels_to_world(point: Vec2) -> Vec3 {
-//     let width = 30.;
-//     let height = 30.;
-//     let (max_x, max_y) = (512f32, 384f32);
-//     let x = (point.x / max_x) * width - width / 2.;
-//     let y = (1. - point.y / max_y) * height - height / 2.;
-//     vec3(x, y, -50.)
-// }
+struct CurveMarkerParams<'a> {
+    curve_type: &'a parser::CurveType,
+    points: &'a [Vec2],
+    curve_duration: f32,
+    preempt_ms: u64,
+    time: u64,
+    slides: usize,
+    num_ticks: f32,
+    // Length in osu px
+    length: f32,
+}
 
-fn circle_center(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
+fn circle_center(a: Vec2, b: Vec2, c: Vec2) -> Option<Vec2> {
     // Given a,b,c border the circle find the center
     let r2 = vec4(a.dot(a), a.x, a.y, 1f32);
     let r3 = vec4(b.dot(b), b.x, b.y, 1f32);
@@ -269,10 +274,15 @@ fn circle_center(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
     let m11 = mat3(r2.yzw(), r3.yzw(), r4.yzw()).determinant();
     let m13 = mat3(r2.xyw(), r3.xyw(), r4.xyw()).determinant();
 
+    // Points in a line
+    if m11 == 0. {
+        return None;
+    }
+
     let x = 0.5 * m12 / m11;
     let y = -0.5 * m13 / m11;
 
-    vec2(x, y)
+    Some(vec2(x, y))
 }
 
 pub fn osu(
@@ -381,17 +391,18 @@ pub fn osu(
 
                 debug!("Curve with duration {curve_duration:?}");
 
-                state.target_curves.push(osu_transform.create_curve_marker(
-                    &curve_type,
-                    &points,
-                    slider_multiplier,
-                    curve_duration,
-                    preempt_ms as u64,
-                    t as u64,
-                    slides,
-                    curve_ticks,
-                    length,
-                ));
+                state
+                    .target_curves
+                    .push(osu_transform.create_curve_marker(CurveMarkerParams {
+                        curve_type: &curve_type,
+                        points: &points,
+                        curve_duration,
+                        preempt_ms: preempt_ms as u64,
+                        time: t as u64,
+                        slides,
+                        num_ticks: curve_ticks,
+                        length,
+                    }));
             } else {
                 // Push target into beat_map
                 state.target_points.push(osu_transform.create_target_marker(
@@ -428,99 +439,6 @@ pub fn osu(
         osu_beat_map,
     ));
 }
-
-// fn create_curve_marker(
-//     curve_type: &parser::CurveType,
-//     points: &[Vec2],
-//     slider_multiplier: f32,
-//     curve_duration: f32,
-//     preempt_ms: u64,
-//     t: u64,
-//     slides: usize,
-//     num_ticks: f32,
-//     // Length in osu px
-//     length: f32,
-// ) -> (CurveMarker, Marker) {
-//     let curve_marker = match curve_type {
-//         parser::CurveType::Bezier => {
-//             let curve = loop_curve(
-//                 points_to_bezier(points)
-//                     .map(convert_osu_pixels_to_world)
-//                     .reparametrize_linear(Interval::new(0., curve_duration).unwrap())
-//                     .unwrap(),
-//                 slides,
-//                 curve_duration,
-//             );
-//
-//             CurveMarker {
-//                 curve,
-//                 duration: curve_duration * slides as f32,
-//                 num_ticks,
-//                 slides,
-//             }
-//         }
-//         parser::CurveType::CentripetalCatmullRom => todo!(),
-//         parser::CurveType::Linear => {
-//             let curve = linear_curve(points, curve_duration, slides);
-//
-//             CurveMarker {
-//                 curve,
-//                 slides,
-//                 num_ticks,
-//                 duration: curve_duration * slides as f32,
-//             }
-//         }
-//         parser::CurveType::PerfectCircle => {
-//             if points.len() != 3 {
-//                 // TODO: default to bezier for PerfectCircle with 3+ points
-//                 todo!()
-//             }
-//
-//             let osu_px_points: Vec<Vec2> = points.to_vec();
-//             let center = circle_center(osu_px_points[0], osu_px_points[1], osu_px_points[2]);
-//             let radius = center.distance(osu_px_points[0]);
-//
-//             let circumference = f32::consts::TAU * radius;
-//
-//             let percent_circle = length / circumference;
-//
-//             let points: Vec<Vec2> = points
-//                 .iter()
-//                 .map(|&p| convert_osu_pixels_to_world(p).xy())
-//                 .collect();
-//
-//             // HACK: Get z from conversion function for later use
-//             let z = convert_osu_pixels_to_world(Vec2::ZERO).z;
-//
-//             let center = circle_center(points[0], points[1], points[2]);
-//             let radius = center.distance(points[0]);
-//
-//             let unlooped_curve = bevy::curve::FunctionCurve::new(Interval::UNIT, |i| {
-//                 let angle = i * TAU * percent_circle;
-//                 let xy = vec2(
-//                     center.x + radius * f32::cos(angle),
-//                     center.y + radius * f32::sin(angle),
-//                 );
-//                 xy.extend(z)
-//             })
-//             .reparametrize_linear(Interval::new(0., curve_duration).unwrap())
-//             .unwrap();
-//
-//             let curve = loop_curve(unlooped_curve, slides, curve_duration);
-//
-//             CurveMarker {
-//                 slides,
-//                 curve,
-//                 num_ticks,
-//                 duration: curve_duration * slides as f32,
-//             }
-//         }
-//     };
-//     (
-//         curve_marker,
-//         Marker::new(Duration::from_millis(t), Duration::from_millis(preempt_ms)),
-//     )
-// }
 
 fn get_audio_file_path(osu_beat_map: &BeatMapOsu) -> PathBuf {
     osu_beat_map
@@ -670,18 +588,18 @@ fn test_circle_from_3_points() {
     let b = vec2(0., 1.);
     let c = vec2(-1., 0.);
     let center = circle_center(a, b, c);
-    assert!(center.norm() < 0.001);
+    assert!(center.unwrap().norm() < 0.001);
 
     let a = vec2(2., 0.);
     let b = vec2(0., 2.);
     let c = vec2(-2., 0.);
     let center = circle_center(a, b, c);
-    assert!(center.norm() < 0.001);
+    assert!(center.unwrap().norm() < 0.001);
 
     let a = vec2(5., 0.);
     let b = vec2(5., 5.);
     let c = vec2(0., 5.);
     let center = circle_center(a, b, c);
-    assert!((center.x - 2.5).abs() < 0.001);
-    assert!((center.y - 2.5).abs() < 0.001);
+    assert!((center.unwrap().x - 2.5).abs() < 0.001);
+    assert!((center.unwrap().y - 2.5).abs() < 0.001);
 }
