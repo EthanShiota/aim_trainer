@@ -377,6 +377,12 @@ impl BeatMapOsu {
         // INFO: this should be sorted
         // TODO: Don't do this
         assert!(timing_points.is_sorted_by_key(|k| k.time));
+        let hit_objects: Vec<HitObject> = hitobj
+            .iter()
+            .map(|s| s.as_slice().try_into().unwrap())
+            .collect();
+
+        assert!(hit_objects.is_sorted_by_key(|k| k.time));
 
         Ok(BeatMapOsu {
             beat_map_path: value,
@@ -414,10 +420,7 @@ impl BeatMapOsu {
                 slider_tick_rate: difficulty["SliderTickRate"].parse().unwrap(),
             },
             timing_points,
-            hit_objects: hitobj
-                .iter()
-                .map(|s| s.as_slice().try_into().unwrap())
-                .collect(),
+            hit_objects,
         })
     }
 

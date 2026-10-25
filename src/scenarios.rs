@@ -314,29 +314,27 @@ pub fn osu(
             let guard = span.enter();
             let t = hit_obj.time;
 
-            while t >= (state.previous_timing_point as usize)
-                && let Some(next_timing_point) = state
-                    .timing_point_iter
-                    .next_if(|next_timing_point| t >= next_timing_point.time as usize)
+            while let Some(next_timing_point) = state
+                .timing_point_iter
+                .next_if(|next_timing_point| t >= next_timing_point.time as usize)
             {
+                debug!("Applying timing point: {:#?}", next_timing_point);
                 // apply next timing point
                 if next_timing_point.uninherited {
                     state.beat_length = next_timing_point.beat_length;
+                    state.slider_velocity = 1.;
                 } else {
-                    if state
-                        .timing_point_iter
-                        .peek()
-                        .is_some_and(|point| point.time as usize == t && point.uninherited)
-                    {
-                        error!("why");
-                    }
                     // slider velocity
-                    state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
-                    event!(
-                        Level::DEBUG,
-                        time = t,
-                        slider_velocity = state.slider_velocity
-                    );
+                    if next_timing_point.beat_length < 0. {
+                        // ???
+                        // -25 -> 4x
+                        // -50 -> 2x
+                        // ???
+                        state.slider_velocity =
+                            f32::powf(next_timing_point.beat_length, -1.) * -100.;
+                    } else {
+                        state.slider_velocity = 1.;
+                    }
                 }
                 state.previous_timing_point = next_timing_point.time;
             }
@@ -378,11 +376,10 @@ pub fn osu(
                     * state.beat_length)
                     / 1000.);
 
-                debug!("curve duration" = curve_duration);
-
                 let num_beats = (curve_duration * 1000.) / state.beat_length;
                 let curve_ticks = num_beats * osu_beat_map.difficulty.slider_tick_rate;
-                debug!("num beats" = num_beats, "curve ticks" = curve_ticks);
+
+                debug!("Curve with duration {curve_duration:?}");
 
                 state.target_curves.push(osu_transform.create_curve_marker(
                     &curve_type,
