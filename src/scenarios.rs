@@ -298,7 +298,7 @@ pub fn osu(
     let osu_transform = RectangularTransform {
         width: 30.,
         height: 30.,
-        distance: 50.,
+        distance: 60.,
     };
     let audio_file_path = get_audio_file_path(&osu_beat_map);
     let audio_file =

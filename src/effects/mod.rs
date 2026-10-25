@@ -1,5 +1,6 @@
 use crate::{
     AppState, SoundSettings, effects,
+    input::Hovered,
     scoreing::SliderScorer,
     target::{self, Active, Marker, TargetMaterial, events::*},
 };
@@ -40,7 +41,7 @@ pub fn hit_sound(sound_settings: Res<SoundSettings>) -> impl Scene {
 pub fn on_slider_tick(
     e: On<SliderTick>,
     mut score: ResMut<Score>,
-    mut active: Query<&mut SliderScorer, With<Active>>,
+    mut active: Query<&mut SliderScorer, (With<Active>, With<Hovered>)>,
 ) {
     if let Ok(mut scorer) = active.get_mut(e.0) {
         scorer.hits += 1;
@@ -52,7 +53,7 @@ pub fn on_slider_tick(
 #[instrument(skip_all)]
 pub fn on_slider_head(
     e: On<SliderHead>,
-    mut active: Query<&mut SliderScorer, With<Active>>,
+    mut active: Query<&mut SliderScorer, (With<Active>, With<Hovered>)>,
     sound_settings: Res<SoundSettings>,
     mut commands: Commands,
 ) {
@@ -66,7 +67,7 @@ pub fn on_slider_head(
 pub fn on_slider_tail(
     e: On<SliderTail>,
     mut score: ResMut<Score>,
-    active: Query<(), With<Active>>,
+    active: Query<(), (With<Active>, With<Hovered>)>,
     mut scorer: Query<&mut SliderScorer>,
     sound_settings: Res<SoundSettings>,
     mut commands: Commands,
@@ -86,7 +87,7 @@ pub fn on_slider_tail(
 pub fn on_slider_repeat(
     e: On<SliderRepeat>,
     mut score: ResMut<Score>,
-    mut active: Query<&mut SliderScorer, With<Active>>,
+    mut active: Query<&mut SliderScorer, (With<Active>, With<Hovered>)>,
     sound_settings: Res<SoundSettings>,
     mut commands: Commands,
 ) {

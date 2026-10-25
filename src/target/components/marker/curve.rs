@@ -200,6 +200,7 @@ fn on_spawn_hint(
     // show curve
 
     // TODO: new line material
+
     let mesh_curve = curve_marker.curve.clone().reparametrize(
         Interval::new(
             0.,
@@ -261,13 +262,21 @@ fn on_spawn_hint(
     clip.add_event_to_target(anim_id, clip.duration(), SliderTail(entity));
 
     // SliderTick
-    let total = curve_marker.num_ticks.round() as u32 + 2 + (curve_marker.slides as u32 - 1);
 
     let tick_interval = clip.duration() / curve_marker.num_ticks;
 
-    for t in (1..=total).map(|i| i as f32 * tick_interval) {
-        clip.add_event_to_target(anim_id, t, SliderTick(entity));
+    let mut total = 0;
+    {
+        let mut t = tick_interval;
+        while t < clip.duration() {
+            total += 1;
+            clip.add_event_to_target(anim_id, t, SliderTick(entity));
+
+            t += tick_interval;
+        }
     }
+
+    total += 2 + (curve_marker.slides as u32 - 1);
 
     let (animation_graph, animation_node_index) =
         AnimationGraph::from_clip(animation_clips.add(clip));
