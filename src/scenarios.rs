@@ -2,13 +2,19 @@
 use bevy::{
     color::palettes::css::RED,
     curve::cubic_splines::{self, LinearSpline},
-    math::{NormedVectorSpace, VectorSpace},
+    math::{
+        NormedVectorSpace, VectorSpace,
+        ops::{abs, atan, atan2},
+    },
     prelude::*,
 };
 use bevy_egui::egui::{emath::Float, os};
 use rodio::Source;
 use std::{
-    f32::{self, consts::TAU},
+    f32::{
+        self,
+        consts::{PI, TAU},
+    },
     fmt::Debug,
     fs::File,
     iter::Peekable,
@@ -68,13 +74,14 @@ trait OsuPixelTransform {
                     todo!()
                 }
 
+                // calculate curve length in osu! px to calculate what percent we need to show
                 let osu_px_points: Vec<Vec2> = points.to_vec();
                 let center = circle_center(osu_px_points[0], osu_px_points[1], osu_px_points[2]);
                 let radius = center.distance(osu_px_points[0]);
 
                 let circumference = f32::consts::TAU * radius;
 
-                let percent_circle = length / circumference;
+                let percent_circle = (length / slides as f32) / circumference;
 
                 let points: Vec<Vec2> = points.iter().map(|&p| self.to_world(p).xy()).collect();
 
@@ -83,9 +90,22 @@ trait OsuPixelTransform {
 
                 let center = circle_center(points[0], points[1], points[2]);
                 let radius = center.distance(points[0]);
+                let v = points[2] - center;
+
+                // TODO: all of this probably needs to consider point order
+
+                let start_angle = atan2(v.y, v.x);
+
+                // INFO: Sanity check
+                let xy = vec2(
+                    center.x + radius * f32::cos(start_angle),
+                    center.y + radius * f32::sin(start_angle),
+                );
+                assert!((xy - points[2]).length() < 0.01);
 
                 let unlooped_curve = bevy::curve::FunctionCurve::new(Interval::UNIT, |i| {
-                    let angle = i * TAU * percent_circle;
+                    // TODO: What direction should this go?
+                    let angle = (1. - i) * TAU * percent_circle + start_angle;
                     let xy = vec2(
                         center.x + radius * f32::cos(angle),
                         center.y + radius * f32::sin(angle),
@@ -240,20 +260,21 @@ impl OsuPixelTransform for RectangularTransform {
 // }
 
 fn circle_center(a: Vec2, b: Vec2, c: Vec2) -> Vec2 {
-    let m1 = (a + b) * 0.5;
-    let m2 = (a + c) * 0.5;
-    let ab = b - a;
-    let ac = c - a;
-    let perp_ab = Vec2::new(-ab.y, ab.x);
-    let perp_ac = Vec2::new(-ac.y, ac.x);
+    // Given a,b,c border the circle find the center
+    let r2 = vec4(a.dot(a), a.x, a.y, 1f32);
+    let r3 = vec4(b.dot(b), b.x, b.y, 1f32);
+    let r4 = vec4(c.dot(c), c.x, c.y, 1f32);
 
-    let denom = perp_ac.dot(perp_ab);
-    if denom.abs() < 1e-6 {
-        return m1;
-    }
-    let t = (m2 - m1).dot(perp_ac) / denom;
-    m1 + t * perp_ab
+    let m12 = mat3(r2.xzw(), r3.xzw(), r4.xzw()).determinant();
+    let m11 = mat3(r2.yzw(), r3.yzw(), r4.yzw()).determinant();
+    let m13 = mat3(r2.xyw(), r3.xyw(), r4.xyw()).determinant();
+
+    let x = 0.5 * m12 / m11;
+    let y = -0.5 * m13 / m11;
+
+    vec2(x, y)
 }
+
 pub fn osu(
     In(osu_beat_map): In<BeatMapOsu>,
     gameplay_settings: Res<GameplaySettings>,
@@ -302,6 +323,13 @@ pub fn osu(
                 if next_timing_point.uninherited {
                     state.beat_length = next_timing_point.beat_length;
                 } else {
+                    if state
+                        .timing_point_iter
+                        .peek()
+                        .is_some_and(|point| point.time as usize == t && point.uninherited)
+                    {
+                        error!("why");
+                    }
                     // slider velocity
                     state.slider_velocity = -(1. / (next_timing_point.beat_length / 100.));
                     event!(
@@ -328,6 +356,7 @@ pub fn osu(
                 }
             };
 
+            // Create hit object
             if let Some(curve_params) = hit_obj.object_params.clone() {
                 let SliderParams {
                     curve_points,

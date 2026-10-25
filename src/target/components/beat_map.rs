@@ -23,6 +23,18 @@ pub struct BeatMapResource {
 // Spawns markers and song in
 impl BeatMap {
     pub fn spawn(self, mut commands: Commands) -> BeatMapResource {
+        for [(_, curr, _), (_, next, _)] in self.target_markers.array_windows::<2>() {
+            if curr.time() == next.time() {
+                error!("marker spawned in at same time");
+            }
+        }
+        for [(curr_marker, curr), (_, next)] in self.target_curves.array_windows::<2>() {
+            // if we spawn next curve while current is alive
+            if Duration::from_secs_f32(curr_marker.duration) + curr.time() > next.time() {
+                error!(curve = ?curr,"curve spawned in at same time");
+            }
+        }
+
         let music_player = commands
             .spawn((AudioPlayer(self.song), DespawnOnExit(AppState::InGame)))
             .id();
