@@ -11,11 +11,7 @@ edition = "2024"
 [workspace.dependencies]
 bevy = { version = "0.20.0", features = [
   "mesh_picking",
-  "file_watcher",
-  "debug",
   "default",
-  "dev",
-  "bevy_dev_tools",
   "bevy_ui",
   "bevy_settings",
   "serialize",
@@ -52,6 +48,7 @@ zip = "9.0.0"
 [features]
 # Enables tracing
 trace = ["bevy/trace", "bevy/trace_tracy"]
+dev = ["bevy/dev"]
 
 
 # Idiomatic Bevy code often triggers these lints, and the CI workflow treats them as errors.
@@ -65,6 +62,7 @@ type_complexity = "allow"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
+features = ["dev"]
 opt-level = 1
 debug = "line-tables-only"
 

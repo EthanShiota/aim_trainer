@@ -16,8 +16,6 @@ use bevy::core_pipeline::oit::{
 };
 use bevy::core_pipeline::tonemapping::Tonemapping;
 
-use bevy::dev_tools::picking_debug::{DebugPickingMode, DebugPickingPlugin};
-use bevy::dev_tools::render_debug::{GlobalRenderDebugOverlay, RenderDebugOverlayKeybindings};
 use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
 use bevy::input_focus::InputFocus;
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
