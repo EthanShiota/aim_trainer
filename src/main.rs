@@ -19,6 +19,7 @@ use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::dev_tools::picking_debug::{DebugPickingMode, DebugPickingPlugin};
 use bevy::dev_tools::render_debug::{GlobalRenderDebugOverlay, RenderDebugOverlayKeybindings};
 use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
+use bevy::input_focus::InputFocus;
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
@@ -27,6 +28,7 @@ use bevy::render::view::NoIndirectDrawing;
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy::ui_widgets::UiWidgetsPlugins;
 use bevy_egui::egui::Widget;
+use bevy_egui::input::EguiWantsInput;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
 use std::time::Duration;
@@ -298,9 +300,15 @@ fn fire_weapon_held(
 
 fn global_bindings(
     key_input: Res<ButtonInput<KeyCode>>,
+    egui_focus: Res<EguiWantsInput>,
     mut commands: Commands,
     mut ui_debug: ResMut<GlobalUiDebugOptions>,
 ) {
+    // don't trigger if something is focused i.e. text input
+    if egui_focus.wants_any_keyboard_input() {
+        return;
+    }
+
     // Global
     if key_input.just_pressed(KeyCode::KeyF) {
         commands.run_system_cached(toggle_fullscreen);
