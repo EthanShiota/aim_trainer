@@ -1,5 +1,9 @@
-use crate::target::Target;
+use crate::state::AppState;
+use crate::target::events::TargetHit;
+use crate::target::{DebugMode, Marker, Target};
 use crate::{GameAction, GameState};
+use bevy::window::{PrimaryWindow, WindowMode};
+use bevy_egui::input::EguiWantsInput;
 use fps_camera::FPSCamera;
 
 use super::GameSettings;
@@ -21,12 +25,107 @@ impl Plugin for GameInputPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<InputMessage>()
             .add_systems(
+                Update,
+                (
+                    global_binds,
+                    game_binds.run_if(in_state(AppState::InGame)),
+                    playing_binds.run_if(in_state(GameState::Playing)),
+                ),
+            )
+            .add_systems(
                 PreUpdate,
                 (update_raycast, handle_fire_input)
                     .in_set(InputSet)
                     .distributive_run_if(in_state(GameState::Playing)),
             )
             .add_systems(PostUpdate, remove_hovered.after(AnimationSystems));
+    }
+}
+
+fn playing_binds(
+    mut commands: Commands,
+    q_target: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
+    mut reader: PopulatedMessageReader<InputMessage>,
+) {
+    if reader.len() > 1 {
+        warn!("more messages then expected!");
+    }
+    for msg in reader.read() {
+        if let InputMessage::FireWeapon = msg {
+            fire_weapon(q_target, &mut commands)
+        }
+    }
+}
+
+fn fire_weapon(
+    q_hit: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
+    commands: &mut Commands,
+) {
+    let mut hits = q_hit.iter().sort::<&Marker>();
+    if let Some((t, _)) = hits.next() {
+        commands.entity(t).trigger(TargetHit);
+    }
+}
+
+fn global_binds(
+    key_input: Res<ButtonInput<KeyCode>>,
+    egui_focus: Res<EguiWantsInput>,
+    mut commands: Commands,
+    mut ui_debug: ResMut<GlobalUiDebugOptions>,
+) {
+    // don't trigger if something is focused i.e. text input
+    if egui_focus.wants_any_keyboard_input() {
+        return;
+    }
+
+    // Global
+    if key_input.just_pressed(KeyCode::KeyF) {
+        commands.run_system_cached(toggle_fullscreen);
+    }
+
+    if key_input.just_pressed(KeyCode::Equal) {
+        ui_debug.enabled.toggle();
+    }
+
+    if key_input.just_pressed(KeyCode::Comma) {
+        commands.set_state(AppState::UiDebug);
+    }
+}
+
+fn game_binds(
+    mut commands: Commands,
+    key_input: Res<ButtonInput<KeyCode>>,
+    mut debug_mode: ResMut<DebugMode>,
+    game_state: Res<State<GameState>>,
+) {
+    let game_state = game_state.get();
+
+    if key_input.just_pressed(KeyCode::Slash) {
+        debug_mode.0 = !debug_mode.0;
+    }
+    if key_input.just_pressed(KeyCode::Escape) {
+        match game_state {
+            GameState::Playing => {
+                commands.set_state(GameState::Paused);
+            }
+            GameState::Paused => commands.set_state(GameState::Playing),
+        }
+    }
+
+    if key_input.just_pressed(KeyCode::Period) {
+        commands.set_state(AppState::ScoreSummery);
+    }
+}
+
+fn toggle_fullscreen(
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
+    mut maximized: Local<bool>,
+) {
+    *maximized = !*maximized;
+    if *maximized {
+        window.mode = WindowMode::BorderlessFullscreen(MonitorSelection::Current);
+    } else {
+        window.mode = WindowMode::Windowed;
     }
 }
 

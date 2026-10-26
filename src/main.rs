@@ -5,45 +5,36 @@ mod input;
 mod menus;
 mod scenarios;
 mod scoreing;
+mod state;
 mod target;
 
-use bevy::anti_alias::smaa::Smaa;
 use bevy::audio::AddAudioSource;
+use bevy::camera::Exposure;
 use bevy::camera::Projection::Perspective;
-use bevy::camera::{Exposure, Hdr};
-use bevy::core_pipeline::oit::{
-    OrderIndependentTransparencyPlugin, OrderIndependentTransparencySettings,
-};
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use state::*;
 
-use bevy::diagnostic::{DiagnosticPath, FrameTimeDiagnosticsPlugin};
-use bevy::input_focus::InputFocus;
-use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
-use bevy::render::diagnostic::RenderDiagnosticsPlugin;
-use bevy::render::view::NoIndirectDrawing;
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
-use bevy::ui_widgets::UiWidgetsPlugins;
 use bevy_egui::egui::Widget;
 use bevy_egui::input::EguiWantsInput;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
-use std::time::Duration;
 use tracing::instrument;
 
-use bevy::camera::visibility::{NoFrustumCulling, RenderLayers};
 use bevy::light::Skybox;
 use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
 
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowMode};
+use bevy::window::{PrimaryWindow, WindowMode};
 
 use crate::crosshair::CrosshairMaterial;
 use crate::input::{Hovered, InputMessage};
 use crate::scoreing::Score;
-use crate::target::events::{TargetDestroyed, TargetHit};
+use crate::target::events::TargetHit;
 use crate::target::{
     CurveMarker, CurveMarkerMaterial, Marker, Target, TargetMarker, TargetResource,
 };
@@ -165,7 +156,6 @@ fn main() {
                     ..default()
                 }),
             FrameTimeDiagnosticsPlugin::default(),
-            // DiagnosticsOverlayPlugin,
         ))
         .add_plugins((
             FPSCameraPlugin,
@@ -175,39 +165,20 @@ fn main() {
             scoreing::ScoringPlugin,
             input::GameInputPlugin,
             effects::EffectPlugin,
+            target::TargetPlugin,
+            state::StatePlugin,
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()
         .init_resource::<GameplaySettings>()
         .add_plugins(UiMaterialPlugin::<CrosshairMaterial>::default())
-        // INFO: State
-        .insert_state(AppState::Menu)
-        .add_sub_state::<GameState>()
-        .add_sub_state::<EditMode>()
         // INFO: Audio buffer for quick scrubbing
         .insert_resource(Assets::<AudioBuffer>::default())
         .add_audio_source::<AudioBuffer>()
-        // INFO: Target plugin
-        .add_plugins(target::TargetPlugin)
         // INFO: Setup world when entering game
         // lights + camera + ui
         .add_systems(OnEnter(AppState::InGame), (setup_ui, terrian))
-        // INFO: Setup main menu
-        // .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
-        .add_systems(OnEnter(GameState::Paused), transition::pause)
-        .add_systems(OnEnter(GameState::Playing), transition::play)
-        .add_systems(OnEnter(AppState::UiDebug), transition::ui_debug)
-        .add_systems(OnEnter(AppState::ScoreSummery), transition::score_summery)
         .add_systems(Update, bevy::ui::widget::update_viewport_render_target_size)
-        // INFO: Game Logic loops
-        .add_systems(
-            Update,
-            (
-                global_bindings,
-                game_loop.run_if(in_state(AppState::InGame)),
-                playing_binds.run_if(in_state(GameState::Playing)),
-            ),
-        )
         // INFO: Egui context systems
         .add_systems(
             EguiPrimaryContextPass,
@@ -220,131 +191,8 @@ fn main() {
         .run();
 }
 
-#[derive(Debug, Hash, Resource, Eq, PartialEq, PartialOrd, States, Clone, Default)]
-enum AppState {
-    InGame,
-    #[default]
-    Menu,
-    UiDebug,
-    ScoreSummery,
-}
-
-#[derive(SubStates, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
-#[source(AppState = AppState::InGame)]
-enum GameState {
-    Paused,
-    #[default]
-    Playing,
-}
-
-#[derive(SubStates, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
-#[source(AppState = AppState::InGame)]
-enum EditMode {
-    Editing,
-    #[default]
-    Normal,
-}
-
 #[derive(Component, Default, Clone)]
 struct PlayerCamera;
-
-fn playing_binds(
-    mut commands: Commands,
-    time: Res<Time<Virtual>>,
-    mut q_curve: Query<(Entity, &mut Target), (With<Hovered>, With<target::Active>)>,
-    q_point: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
-    mut reader: PopulatedMessageReader<InputMessage>,
-) {
-    if reader.len() > 1 {
-        warn!("more messages then expected!");
-    }
-    for msg in reader.read() {
-        match msg {
-            InputMessage::FireWeapon => fire_weapon(q_point, &mut commands),
-            InputMessage::FireWeaponHeld => {
-                fire_weapon_held(time.delta(), &mut q_curve, &mut commands)
-            }
-        }
-    }
-}
-
-#[instrument(skip_all)]
-fn fire_weapon(
-    q_hit: Query<(Entity, &Marker), (With<Target>, With<Hovered>)>,
-    commands: &mut Commands,
-) {
-    let mut hits: Vec<_> = q_hit.into_iter().collect();
-    hits.sort_by_key(|elm| elm.1);
-    debug!(hits = ?hits);
-    if let Some((t, _)) = hits.first() {
-        commands.entity(*t).trigger(TargetHit);
-    }
-}
-
-fn fire_weapon_held(
-    delta: Duration,
-    q_hit: &mut Query<(Entity, &mut Target), (With<Hovered>, With<target::Active>)>,
-    commands: &mut Commands,
-) {
-    for (entity, mut target) in q_hit.iter_mut() {
-        if let Target::Duration(dur) = target.as_mut() {
-            *dur = dur.saturating_sub(delta);
-            if dur.is_zero() {
-                commands.entity(entity).trigger(TargetDestroyed);
-            }
-        }
-    }
-}
-
-fn global_bindings(
-    key_input: Res<ButtonInput<KeyCode>>,
-    egui_focus: Res<EguiWantsInput>,
-    mut commands: Commands,
-    mut ui_debug: ResMut<GlobalUiDebugOptions>,
-) {
-    // don't trigger if something is focused i.e. text input
-    if egui_focus.wants_any_keyboard_input() {
-        return;
-    }
-
-    // Global
-    if key_input.just_pressed(KeyCode::KeyF) {
-        commands.run_system_cached(toggle_fullscreen);
-    }
-
-    if key_input.just_pressed(KeyCode::Equal) {
-        ui_debug.enabled.toggle();
-    }
-
-    if key_input.just_pressed(KeyCode::Comma) {
-        commands.set_state(AppState::UiDebug);
-    }
-}
-
-fn game_loop(
-    mut commands: Commands,
-    key_input: Res<ButtonInput<KeyCode>>,
-    mut debug_mode: ResMut<target::DebugMode>,
-    game_state: Res<State<GameState>>,
-) {
-    let game_state = game_state.get();
-
-    if key_input.just_pressed(KeyCode::Slash) {
-        debug_mode.0 = !debug_mode.0;
-    }
-    if key_input.just_pressed(KeyCode::Escape) {
-        match game_state {
-            GameState::Playing => {
-                commands.set_state(GameState::Paused);
-            }
-            GameState::Paused => commands.set_state(GameState::Playing),
-        }
-    }
-
-    if key_input.just_pressed(KeyCode::Period) {
-        commands.set_state(AppState::ScoreSummery);
-    }
-}
 
 fn debug_window(
     mut contexts: EguiContexts,
@@ -409,57 +257,6 @@ fn debug_window(
             Ok(())
         });
     Ok(())
-}
-pub mod transition {
-
-    use parser::BeatMapOsu;
-
-    use crate::target::BeatMap;
-
-    use super::*;
-
-    pub(crate) fn play(
-        mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
-        mut grab_mode: ResMut<GrabMouse>,
-        mut time: ResMut<Time<Virtual>>,
-        q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
-    ) {
-        q_sink.into_iter().for_each(|sink| sink.0.play());
-        time.unpause();
-        cursor_options.grab_mode = CursorGrabMode::Locked;
-        cursor_options.visible = false;
-        **grab_mode = true;
-    }
-    pub(crate) fn pause(
-        mut commands: Commands,
-        mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
-        mut grab_mode: ResMut<GrabMouse>,
-        mut time: ResMut<Time<Virtual>>,
-        q_sink: Query<(&mut AudioSink, &AudioPlayer<AudioBuffer>)>,
-    ) {
-        q_sink.into_iter().for_each(|sink| sink.0.pause());
-        time.pause();
-        **grab_mode = false;
-        cursor_options.grab_mode = CursorGrabMode::None;
-        cursor_options.visible = true;
-        commands.spawn_scene(menus::pause_menu());
-    }
-
-    pub(crate) fn ui_debug(mut commands: Commands) {
-        // INFO: Hook for debug window
-    }
-
-    pub(crate) fn score_summery(
-        mut commands: Commands,
-        score: Res<Score>,
-        mut grab_mode: ResMut<GrabMouse>,
-        mut cursor_options: Single<&mut CursorOptions, With<PrimaryWindow>>,
-    ) {
-        **grab_mode = false;
-        cursor_options.grab_mode = CursorGrabMode::None;
-        cursor_options.visible = true;
-        commands.spawn_scene(menus::score_summery(&score));
-    }
 }
 
 #[derive(Resource)]
@@ -561,18 +358,6 @@ fn light_and_cameras(
         DisableOnExit(AppState::InGame),
         EnableOnEnter(AppState::InGame),
     ));
-}
-
-fn toggle_fullscreen(
-    mut window: Single<&mut Window, With<PrimaryWindow>>,
-    mut maximized: Local<bool>,
-) {
-    *maximized = !*maximized;
-    if *maximized {
-        window.mode = WindowMode::BorderlessFullscreen(MonitorSelection::Current);
-    } else {
-        window.mode = WindowMode::Windowed;
-    }
 }
 
 /// Syncs Game Settings from resource to wherever they need to be applied

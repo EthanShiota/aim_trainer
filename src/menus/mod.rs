@@ -25,7 +25,6 @@ use bevy::{
     input::common_conditions::input_just_pressed,
     input_focus::{AutoFocus, InputFocus, pointer_focus::PointerFocusPlugin},
     math::AspectRatio,
-    picking::hover::Hovered,
     prelude::*,
     render::render_resource::BlendState,
     settings::SaveSettings,

@@ -1,7 +1,8 @@
+use crate::state::AppState;
 use bevy::prelude::*;
 use bevy_egui::prelude::*;
 
-use crate::{AudioBuffer, EditMode, target::Target};
+use crate::{AudioBuffer, target::Target};
 
 pub struct EditPlugin;
 impl Plugin for EditPlugin {
@@ -10,7 +11,7 @@ impl Plugin for EditPlugin {
             //.add_systems(Update, edit_mode.run_if(in_state(EditMode::Editing)))
             .add_systems(
                 EguiPrimaryContextPass,
-                edit_mode_ui.run_if(in_state(EditMode::Editing)),
+                edit_mode_ui.run_if(in_state(crate::state::EditMode::Editing)),
             );
     }
 }
