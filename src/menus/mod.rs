@@ -230,12 +230,17 @@ fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSett
 #[derive(Component)]
 struct SelectedFile(Task<Option<PathBuf>>);
 
+struct BeatMapGroup {
+    title: String,
+    versions: Vec<BeatMapOsu>,
+}
+
 fn main_menu(
     mut contexts: EguiContexts,
     mut commands: Commands,
-    mut beat_maps: Local<Vec<Vec<BeatMapOsu>>>,
+    mut beat_maps: Local<Vec<BeatMapGroup>>,
     mut selected_file: Query<(&mut SelectedFile, Entity)>,
-    mut asset_server: ResMut<AssetServer>,
+    mut search: Local<String>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     // ctx.global_style_mut(|style| {
@@ -280,6 +285,11 @@ fn main_menu(
             //     .add_children(elements.as_slice());
         }
 
+        ui.horizontal(|ui| {
+            ui.label("Search");
+            ui.text_edit_singleline(&mut *search);
+        });
+
         for (mut file, entity) in selected_file.iter_mut() {
             if let Some(filepath) = check_ready(&mut file.0) {
                 // Dialog can return None
@@ -292,20 +302,21 @@ fn main_menu(
             }
         }
         // Beatmap select
-        for versions in beat_maps.iter_mut() {
-            if !versions.is_empty() {
-                egui::CollapsingHeader::new(&versions[0].metadata.title).show(ui, |ui| {
-                    // use hit_object count as proxy for difficulty
-                    versions.sort_by_key(|entry| entry.hit_objects.len());
-                    for beat_map in versions.iter() {
-                        let button = ui.button((beat_map.metadata.version).to_string());
-                        if button.clicked() {
-                            commands.set_state(AppState::InGame);
-                            commands.run_system_cached_with(scenarios::osu, beat_map.clone());
-                        }
+        for group in beat_maps
+            .iter_mut()
+            .filter(|map| map.title.contains(&*search.to_lowercase()))
+        {
+            egui::CollapsingHeader::new(&group.title).show(ui, |ui| {
+                // use hit_object count as proxy for difficulty
+                group.versions.sort_by_key(|entry| entry.hit_objects.len());
+                for beat_map in group.versions.iter() {
+                    let button = ui.button((beat_map.metadata.version).to_string());
+                    if button.clicked() {
+                        commands.set_state(AppState::InGame);
+                        commands.run_system_cached_with(scenarios::osu, beat_map.clone());
                     }
-                });
-            }
+                }
+            });
         }
     });
 
@@ -398,7 +409,7 @@ fn unzip_beatmap(base_dir: &Path, beatmap_path: &Path) -> Result<(), Box<dyn Err
 }
 
 // TODO: Async
-fn serialize_beatmaps(beatmap_dir: &str) -> Vec<Vec<BeatMapOsu>> {
+fn serialize_beatmaps(beatmap_dir: &str) -> Vec<BeatMapGroup> {
     let now = time::Instant::now();
     let mut count = 0;
     debug!("begin serialization");
@@ -420,7 +431,12 @@ fn serialize_beatmaps(beatmap_dir: &str) -> Vec<Vec<BeatMapOsu>> {
                 versions.push(map);
             }
         }
-        beat_maps.push(versions);
+        if let Some(map) = versions.first() {
+            let title = map.metadata.title.to_lowercase();
+            let beat_map_group = BeatMapGroup { title, versions };
+
+            beat_maps.push(beat_map_group);
+        }
     }
     debug!(
         "end serialization of {count} maps in {} secs",
