@@ -19,10 +19,8 @@ use bevy::platform::collections::HashMap;
 use bevy::post_process::bloom::Bloom;
 use bevy::settings::{ReflectSettingsGroup, SaveSettingsSync, SettingsGroup, SettingsPlugin};
 use bevy_egui::egui::Widget;
-use bevy_egui::input::EguiWantsInput;
 use rodio::buffer::SamplesBuffer;
 use std::hash::Hash;
-use tracing::instrument;
 
 use bevy::light::Skybox;
 use bevy::picking::PickingSettings;
@@ -128,7 +126,7 @@ pub enum GameAction {
 
 fn main() {
     App::new()
-        .insert_resource(GrabMouse(true))
+        .insert_resource(GrabMouse(false))
         .insert_resource(PickingSettings {
             is_enabled: true,
             is_input_enabled: true,
@@ -156,7 +154,21 @@ fn main() {
                     ..default()
                 }),
             FrameTimeDiagnosticsPlugin::default(),
+            //bevy::dev_tools::picking_debug::DebugPickingPlugin,
         ))
+        // .insert_resource(DebugPickingMode::Noisy)
+        // .add_systems(
+        //     PreUpdate,
+        //     (|mut mode: ResMut<DebugPickingMode>| {
+        //         *mode = match *mode {
+        //             DebugPickingMode::Disabled => DebugPickingMode::Normal,
+        //             _ => DebugPickingMode::Disabled,
+        //         };
+        //     })
+        //     .distributive_run_if(bevy::input::common_conditions::input_just_pressed(
+        //         KeyCode::F3,
+        //     )),
+        // )
         .add_plugins((
             FPSCameraPlugin,
             EguiPlugin::default(),

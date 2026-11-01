@@ -3,18 +3,23 @@ use std::{
     f32::consts::{PI, TAU},
     fs, io,
     path::{Path, PathBuf},
+    sync::Arc,
     time,
 };
 
 use bevy::{
+    app::on_r_inserted,
     camera::{CameraOutputMode, visibility::RenderLayers},
     color::palettes::{
-        css::{self, BLACK, WHITE},
+        css::{self, BLACK, GREEN, RED, WHITE, YELLOW},
         tailwind,
     },
+    ecs::entity_disabling::Disabled,
     feathers::{
         FeathersCorePlugin,
-        controls::FeathersButton,
+        controls::{
+            FeathersButton, FeathersListRow, FeathersListView, FeathersMenu, FeathersMenuItem,
+        },
         font_styles,
         theme::{
             self, InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor,
@@ -22,25 +27,34 @@ use bevy::{
         },
         tokens::{self, BUTTON_TEXT, MENU_BG, MENU_BORDER},
     },
-    input::common_conditions::input_just_pressed,
-    input_focus::{AutoFocus, InputFocus, pointer_focus::PointerFocusPlugin},
+    input::{common_conditions::input_just_pressed, mouse::MouseScrollPixelsPerLine},
+    input_focus::{
+        AutoFocus, InputFocus, directional_navigation::FocusableArea,
+        pointer_focus::PointerFocusPlugin, tab_navigation::TabIndex,
+    },
     math::AspectRatio,
+    picking::hover::Hovered,
     prelude::*,
     render::render_resource::BlendState,
+    scene::{Ready, SceneScope},
     settings::SaveSettings,
     tasks::{Task, futures::check_ready},
-    text::{EditableText, TextCursorStyle, TextEdit},
-    ui::Pressed,
-    ui_widgets::{self, TextInputPlugin},
+    text::{EditableText, TextCursorStyle, TextEdit, TextEditChange},
+    ui::{Checked, InteractionDisabled, Pressed, Selectable, Selected},
+    ui_widgets::{
+        self, Activate, Button, ListBox, ListItem, ScrollArea, ScrollAreaPlugin, TextInput,
+        TextInputPlugin, ValueChange, listbox_update_selection,
+    },
     window::PrimaryWindow,
 };
-use bevy_egui::egui::{Ui, emath::Float};
+use bevy_egui::egui::Ui;
 use bevy_egui::{egui::UiBuilder, prelude::*};
 use rfd::FileDialog;
+use ui::spacing;
 use zip::{ZipArchive, result::ZipError};
 
 use crate::{
-    AppState, GameSettings, GameState, GameplaySettings, SoundSettings,
+    AppState, GameSettings, GameState, GameplaySettings, PlayerCamera, SoundSettings,
     menus::components::container, scenarios, scoreing::Score,
 };
 
@@ -53,13 +67,31 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             EguiPrimaryContextPass,
-            (main_menu, settings_window).run_if(in_state(AppState::Menu)),
+            (settings_window).run_if(in_state(AppState::Menu)),
         )
         .add_systems(Startup, setup)
+        .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
         .add_plugins(FeathersCorePlugin)
         .add_systems(
             Update,
             settings_item_submit.run_if(input_just_pressed(KeyCode::Enter)),
+        )
+        .add_observer(
+            |e: On<PointerClick>,
+             q: Query<(Option<&Name>, &ComputedNode)>,
+             children: Query<&ChildOf>,
+             node_ref: Query<EntityRef>|
+             -> Result {
+                if let Ok((name, node)) = q.get(e.entity) {
+                    debug!(?name, size = ?&node.size, content_size = ?&node.content_size);
+                    for node in children.iter_ancestors(e.entity) {
+                        if let Ok(name) = node_ref.get(node)?.get_components::<&Name>() {
+                            debug!(?name);
+                        }
+                    }
+                }
+                Ok(())
+            },
         );
     }
 }
@@ -143,65 +175,73 @@ fn settings_window(
     window: Single<&Window, With<PrimaryWindow>>,
     mut commands: Commands,
 ) -> Result {
-    egui::Window::new("Settings").show(contexts.ctx_mut()?, |ui| {
-        if *confirm {
-            if ui.button("confirm").clicked() {
-                *settings.as_mut() = GameSettings::default();
-                commands.queue(SaveSettings::IfChanged);
-                *confirm = false;
-            }
-            if ui.button("cancel").clicked() {
-                *confirm = false;
-            }
-        } else {
-            ui.add(
-                egui::Slider::new(&mut sound_settings.music_volume, 0.0..=1.0).text("Music Volume"),
-            );
-            ui.add(
-                egui::Slider::new(&mut sound_settings.effects_volume, 0.0..=1.0)
-                    .text("Effects Volume"),
-            );
-            // let sfx_response = ui.add(egui::TextEdit::singleline(&mut *sfx_override_buffer));
-            // ui.label("Sfx Override, must be in assets directory");
-            //
-            // if sfx_response.changed()
-            //     && std::fs::exists(format!("assets/{}", *sfx_override_buffer)).unwrap_or(false)
-            // {
-            //     sound_settings.sfx_override = Some(sfx_override_buffer.clone());
-            // }
+    egui::Window::new("Settings")
+        .default_pos((1000., 0.))
+        .default_open(false)
+        .show(contexts.ctx_mut()?, |ui| {
+            if *confirm {
+                if ui.button("confirm").clicked() {
+                    *settings.as_mut() = GameSettings::default();
+                    commands.queue(SaveSettings::IfChanged);
+                    *confirm = false;
+                }
+                if ui.button("cancel").clicked() {
+                    *confirm = false;
+                }
+            } else {
+                ui.add(
+                    egui::Slider::new(&mut sound_settings.music_volume, 0.0..=1.0)
+                        .text("Music Volume"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut sound_settings.effects_volume, 0.0..=1.0)
+                        .text("Effects Volume"),
+                );
+                // let sfx_response = ui.add(egui::TextEdit::singleline(&mut *sfx_override_buffer));
+                // ui.label("Sfx Override, must be in assets directory");
+                //
+                // if sfx_response.changed()
+                //     && std::fs::exists(format!("assets/{}", *sfx_override_buffer)).unwrap_or(false)
+                // {
+                //     sound_settings.sfx_override = Some(sfx_override_buffer.clone());
+                // }
 
-            ui.add(
-                egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0)
-                    .text("Mouse Sensitivity"),
-            );
-            ui.add(egui::Slider::new(&mut settings.dpi, 400..=3200).text("DPI"));
-            ui.add(
-                egui::Slider::new(&mut settings.fov, 0.0..=PI)
-                    .text("Vertical FOV in radians")
-                    .step_by(0.0),
-            );
+                ui.add(
+                    egui::Slider::new(&mut settings.mouse_sensitivity, 0.5..=30.0)
+                        .text("Mouse Sensitivity"),
+                );
+                ui.add(egui::Slider::new(&mut settings.dpi, 400..=3200).text("DPI"));
+                ui.add(
+                    egui::Slider::new(&mut settings.fov, 0.0..=PI)
+                        .text("Vertical FOV in radians")
+                        .step_by(0.0),
+                );
 
-            ui.add(
-                egui::Slider::new(&mut gameplay_settings.target_scale, 0.0..=2.0)
-                    .text("Target Scale"),
-            );
+                ui.add(
+                    egui::Slider::new(&mut gameplay_settings.target_scale, 0.0..=2.0)
+                        .text("Target Scale"),
+                );
 
-            let a: AspectRatio =
-                AspectRatio::try_from(window.size()).unwrap_or(AspectRatio::SIXTEEN_NINE);
-            ui.label(format!(
-                "Vertical FOV: {} degrees\nHorizontal FOV: {}",
-                settings.fov * (360. / TAU),
-                settings.fov * (360. / TAU) * a.ratio()
-            ));
-            if ui.button("reset").clicked() {
-                *confirm = true;
+                let a: AspectRatio =
+                    AspectRatio::try_from(window.size()).unwrap_or(AspectRatio::SIXTEEN_NINE);
+                ui.label(format!(
+                    "Vertical FOV: {} degrees\nHorizontal FOV: {}",
+                    settings.fov * (360. / TAU),
+                    settings.fov * (360. / TAU) * a.ratio()
+                ));
+                if ui.button("reset").clicked() {
+                    *confirm = true;
+                }
             }
-        }
-    });
+        });
     Ok(())
 }
 
-fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
+fn setup(
+    mut commands: Commands,
+    mut egui_global_settings: ResMut<EguiGlobalSettings>,
+    q_cam: Query<Entity, With<PlayerCamera>>,
+) {
     egui_global_settings.auto_create_primary_context = false;
 
     commands.insert_resource(components::theme());
@@ -229,12 +269,16 @@ fn setup(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSett
 #[derive(Component)]
 struct SelectedFile(Task<Option<PathBuf>>);
 
+#[derive(Clone, Component)]
+#[component(immutable)]
 struct BeatMapGroup {
+    // Lowercase title for search
     title: String,
+    display_title: String,
     versions: Vec<BeatMapOsu>,
 }
 
-fn main_menu(
+fn main_menu_egui(
     mut contexts: EguiContexts,
     mut commands: Commands,
     mut beat_maps: Local<Vec<BeatMapGroup>>,
@@ -242,20 +286,12 @@ fn main_menu(
     mut search: Local<String>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
-    // ctx.global_style_mut(|style| {
-    //     style.visuals.extreme_bg_color = color(RED_700);
-    // });
     let mut viewport_ui = Ui::new(
         ctx.clone(),
         "viewport".into(),
         UiBuilder::new().max_rect(ctx.viewport_rect()),
     );
 
-    // let mut vis = viewport_ui.visuals().clone();
-    // egui::Window::new("style").show(&mut viewport_ui, |ui| vis.ui(ui));
-    // ctx.global_style_mut(|style| {
-    //     style.visuals = vis;
-    // });
     let beatmap_dir = "osu_beatmaps";
     // don't spin when beatmap_dir is empty
     once!(if beat_maps.is_empty() {
@@ -432,7 +468,12 @@ fn serialize_beatmaps(beatmap_dir: &str) -> Vec<BeatMapGroup> {
         }
         if let Some(map) = versions.first() {
             let title = map.metadata.title.to_lowercase();
-            let beat_map_group = BeatMapGroup { title, versions };
+            let display_title = map.metadata.title.clone();
+            let beat_map_group = BeatMapGroup {
+                title,
+                display_title,
+                versions,
+            };
 
             beat_maps.push(beat_map_group);
         }
@@ -520,12 +561,231 @@ pub fn score_summery(score: &Score) -> impl Scene {
     }
 }
 
-fn header() -> impl Scene {
+pub fn main_menu() -> impl Scene {
+    let beatmap_dir = "osu_beatmaps";
+    let beat_maps = serialize_beatmaps(beatmap_dir);
+
+    bsn! {
+        #MainMenu
+        DespawnOnExit::<AppState>(AppState::Menu)
+
+        Node {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            row_gap: spacing::SM,
+            justify_items: JustifyItems::Start,
+            width: vw(100.),
+            height: vh(100.),
+
+        }
+
+        ThemeBackgroundColor(tokens::WINDOW_BG)
+        Children [
+            @header()
+            --
+            @search_bar()
+            --
+            #SelectorGrid
+            Node {
+                display: Display::Flex,
+                column_gap: spacing::SM,
+                overflow: Overflow::hidden(),
+            }
+
+            Children [
+                @beatmap_selector(beat_maps)
+                --
+                @beatmap_version_selector()
+            ]
+        ]
+    }
+}
+
+fn beatmap_version_selector() -> impl Scene {
     bsn! {
         Node {
-            width: vw(100.),
-            height: px(64),
-            padding: px(16)
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            width: spacing::space(80.),
+            row_gap: spacing::SM
         }
+        on(|e: On<BeatmapGroupSelected>, beatmap_group: Query<&BeatMapGroup>, mut commands: Commands| -> Result {
+            let mut group = beatmap_group.get(e.beatmap_group)?.clone();
+            // TODO: Better difficulty
+            group.versions.sort_by_key(|map| map.hit_objects.len());
+            let group: Vec<_> = group.versions.into_iter().map(|ver| {
+                    bsn! {
+                        #VersionOption
+                        Button
+                        @FeathersListRow
+                        ThemeBackgroundColor({tokens::LISTROW_BG})
+                        ThemeBorderColor({tokens::GROUP_BORDER})
+                        Node {
+                            padding: spacing::MD,
+                            border: spacing::space(0.5),
+                            align_items: AlignItems::Center
+
+                            width: spacing::space(80.),
+                            height: spacing::LG,
+                        }
+                        on(move |_: On<Activate>, mut commands: Commands| {
+                            commands.set_state(AppState::InGame);
+                            commands.run_system_cached_with(scenarios::osu, ver.clone());
+                        })
+
+                        Children [
+                            Text({&ver.metadata.version})
+                            ThemedText
+                            ThemeTextColor(tokens::TEXT_MAIN)
+                            TextFont {
+                                font_size: px(20.)
+                            }
+                        ]
+                    }
+            }).collect();
+            commands.entity(e.event_target()).despawn_children();
+            commands.entity(e.event_target()).apply_scene(
+                bsn! {
+                    ThemeBackgroundColor(tokens::MENUITEM_BG)
+                    Children [
+                        {group}
+                    ]
+                }
+            );
+            Ok(())
+
+        })
+        BeatmapVersionSelector
+
+    }
+}
+
+#[derive(Component, Clone, Copy, Default)]
+struct BeatmapSelector;
+
+#[derive(Component, Clone, Copy, Default)]
+struct BeatmapVersionSelector;
+
+#[derive(EntityEvent)]
+struct BeatmapGroupSelected {
+    entity: Entity,
+    beatmap_group: Entity,
+}
+
+fn beatmap_selector(maps: Vec<BeatMapGroup>) -> impl Scene {
+    let map_list: Vec<_> = maps
+        .into_iter()
+        .map(|beatmap_group| {
+            bsn! {
+                #BeatmapGroup
+                @FeathersListRow
+                Node {
+                    padding: spacing::MD,
+                    border: spacing::space(0.5),
+                    align_items: AlignItems::Center,
+                    margin: UiRect::bottom(spacing::SM),
+
+                    width: spacing::space(80.),
+                    height: spacing::LG,
+                }
+                // Button
+                ListItem
+                ThemeBackgroundColor({tokens::LISTROW_BG})
+                ThemeBorderColor({tokens::GROUP_BORDER})
+                TabIndex(-1)
+                beatmap_group
+                Children [
+                    ThemedText
+                    ThemeTextColor(tokens::TEXT_MAIN)
+
+                    Text({&beatmap_group.display_title})
+
+                    TextFont {
+                        font_size: px(20.)
+                    }
+                ]
+            }
+        })
+        .collect();
+    bsn! {
+            @FeathersListView {
+                @rows: bsn_list!{{map_list}}
+            }
+
+            #BeatmapSelector
+            BeatmapSelector
+
+            on(|event: On<ValueChange<Entity>>, mut commands: Commands, version_selector: Query<Entity, With<BeatmapVersionSelector>>| -> Result {
+                    let selector =  version_selector.single()?;
+                    commands.trigger(BeatmapGroupSelected {entity: selector, beatmap_group: event.value});
+                    Ok(())
+
+            })
+            on(listbox_update_selection)
+
+    }
+}
+
+fn header() -> impl Scene {
+    bsn! {
+        #MenuHeader
+        Node {
+            display: Display::Flex,
+            width: vw(100.),
+            padding: px(16),
+            min_height: px(64)
+        }
+        ThemedText
+        ThemeBackgroundColor(tokens::MENU_BG)
+    }
+}
+
+fn search_bar() -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+        }
+        Children [
+            Node {
+                display: Display::Flex,
+                align_content: AlignContent::Center,
+                flex_wrap: FlexWrap::NoWrap,
+                width: em(50),
+                padding: em(0.5)
+            }
+            TextCursorStyle
+            ThemeBackgroundColor(tokens::TEXT_INPUT_BG)
+            ThemeTextColor(tokens::TEXT_INPUT_TEXT)
+            ThemedText
+            EditableText {
+                allow_newlines: false
+            }
+            TextFont {
+                font_size: px(24.)
+            }
+            TextInput
+            TabIndex(-1)
+            on(|e: On<TextEditChange>, mut prev: Local<String>, text_edit: Query<&EditableText>, mut beatmaps: Query<(Entity, &BeatMapGroup, &mut Node)>, mut commands: Commands| -> Result {
+                let text_edit = text_edit.get(e.event_target())?;
+                if text_edit.value() == &**prev {
+                    // no change
+                    return Ok(());
+                } else {
+                    *prev = text_edit.value().to_string().to_lowercase();
+                }
+
+                for (_ent, map, mut node) in beatmaps.iter_mut() {
+                    if map.title.contains(&*prev) {
+                        node.display = Display::Flex;
+                    } else {
+                        node.display = Display::None;
+                    }
+                }
+
+                Ok(())
+
+            })
+        ]
     }
 }

@@ -2,6 +2,8 @@ use crate::state::AppState;
 use crate::target::events::TargetHit;
 use crate::target::{DebugMode, Marker, Target};
 use crate::{GameAction, GameState};
+use bevy::input_focus::InputFocus;
+use bevy::text::EditableText;
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy_egui::input::EguiWantsInput;
 use fps_camera::FPSCamera;
@@ -70,11 +72,21 @@ fn fire_weapon(
 fn global_binds(
     key_input: Res<ButtonInput<KeyCode>>,
     egui_focus: Res<EguiWantsInput>,
+    focus: Res<InputFocus>,
+    q_window: Query<&Window>,
+    q_text: Query<&EditableText>,
     mut commands: Commands,
     mut ui_debug: ResMut<GlobalUiDebugOptions>,
 ) {
     // don't trigger if something is focused i.e. text input
-    if egui_focus.wants_any_keyboard_input() {
+    if egui_focus.wants_any_keyboard_input()
+        || 
+    // continue if
+    // -> no focus
+    // -> window focus
+    // -> not text focus
+    !focus.get().is_none_or(|e| q_window.contains(e) || !q_text.contains(e))
+    {
         return;
     }
 

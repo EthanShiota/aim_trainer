@@ -178,28 +178,3 @@ pub fn crosshair_settings() -> impl Scene {
         ]
     }
 }
-
-pub fn beatmap_accordian(beatmap: &BeatMapOsu, asset_server: &mut AssetServer) -> impl Scene {
-    let bg_image = asset_server
-        .load_builder()
-        .override_unapproved()
-        .load(beatmap.background().unwrap());
-    bsn! {
-        ImageNode {
-            image: bg_image,
-            image_mode: NodeImageMode::Auto
-        }
-        ThemeBackgroundColor(BUTTON_BG)
-        ThemeTextColor(TEXT_MAIN)
-        Text({&beatmap.metadata.title})
-    }
-}
-
-/// Used for a single version of a beatmap
-pub fn beatmap_version(beatmap: &BeatMapOsu) -> impl Scene {
-    bsn! {
-        ThemeBackgroundColor(BUTTON_BG)
-        ThemeTextColor(TEXT_MAIN)
-        Text({&beatmap.metadata.version})
-    }
-}
