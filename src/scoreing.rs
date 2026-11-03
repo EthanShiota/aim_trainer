@@ -1,11 +1,17 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use bevy::{
-    color::palettes::tailwind::BLUE_300, feathers::theme::ThemeBackgroundColor, prelude::*,
+    color::palettes::tailwind::BLUE_300,
+    feathers::{
+        theme::{ThemeBackgroundColor, ThemeTextColor},
+        tokens,
+    },
+    prelude::*,
     text::TextSection,
 };
 use parser::BeatMapOsu;
 use tracing::instrument;
+use ui::spacing;
 
 use crate::{AppState, target::events::TargetHit};
 pub struct ScoringPlugin;
@@ -17,7 +23,7 @@ pub struct Score {
     pub difficulty_multiplier: f32,
     pub hit_counts: HitCounts,
     pub combo: usize,
-    pub metadata: Box<BeatMapOsu>,
+    pub metadata: Arc<BeatMapOsu>,
 }
 
 #[derive(Default)]
@@ -43,7 +49,7 @@ impl Score {
         points: f64,
         overall_difficulty: f32,
         difficulty_multiplier: f32,
-        metadata: BeatMapOsu,
+        metadata: Arc<BeatMapOsu>,
     ) -> Self {
         Self {
             points,
@@ -51,7 +57,7 @@ impl Score {
             difficulty_multiplier,
             combo: 0,
             hit_counts: default(),
-            metadata: Box::new(metadata),
+            metadata,
         }
     }
 
@@ -184,6 +190,7 @@ fn setup(mut commands: Commands) {
             flex_direction: FlexDirection::Row
             align_self: AlignSelf::Start,
             justify_content: JustifyContent::Start,
+            padding: spacing::MD,
             width: vw(100.),
         }
         Children [
@@ -192,7 +199,7 @@ fn setup(mut commands: Commands) {
             TextFont {
                 font_size: px(44.),
             }
-            TextColor(BLUE_300)
+            ThemeTextColor(tokens::TEXT_MAIN)
         ]
         DespawnOnExit::<AppState>(AppState::InGame)
     });
@@ -200,10 +207,8 @@ fn setup(mut commands: Commands) {
 
 fn update_score(score: If<Res<Score>>, mut q_display: Query<&mut Text, With<ScoreDisplay>>) {
     if let Ok(mut text) = q_display.single_mut() {
-        *text.get_text_mut() = format!(
-            "Score {} -> Accuracy {}",
-            score.points,
-            score.hit_counts.accuracy()
-        );
+        let points = score.points;
+        let acc = score.hit_counts.accuracy() * 100.;
+        *text.get_text_mut() = format!("{acc:.1}% {points}",);
     }
 }

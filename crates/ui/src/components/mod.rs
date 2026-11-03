@@ -23,10 +23,7 @@ pub mod spacing {
 
 pub use spacing::*;
 
-use bevy::{
-    feathers::{theme::ThemeBackgroundColor, tokens},
-    prelude::*,
-};
+use bevy::prelude::*;
 
 pub fn card(border: bool) -> impl Scene {
     bsn! {

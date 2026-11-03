@@ -3,7 +3,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::{
-    AppState, AudioBuffer,
+    AppState, AudioBuffer, SoundSettings,
     target::{CurveMarker, Marker, TargetMarker},
 };
 
@@ -22,7 +22,11 @@ pub struct BeatMapResource {
 
 // Spawns markers and song in
 impl BeatMap {
-    pub fn spawn(self, mut commands: Commands) -> BeatMapResource {
+    pub fn spawn(
+        self,
+        mut commands: Commands,
+        sound_settings: Res<SoundSettings>,
+    ) -> BeatMapResource {
         for [(_, curr, _), (_, next, _)] in self.target_markers.array_windows::<2>() {
             if curr.time() == next.time() {
                 error!("marker spawned in at same time");
@@ -36,7 +40,12 @@ impl BeatMap {
         }
 
         let music_player = commands
-            .spawn((AudioPlayer(self.song), DespawnOnExit(AppState::InGame)))
+            .spawn((
+                AudioPlayer(self.song),
+                DespawnOnExit(AppState::InGame),
+                PlaybackSettings::default()
+                    .with_volume(bevy::audio::Volume::Linear(sound_settings.music_volume)),
+            ))
             .id();
         for (target_marker, marker, transform) in self.target_markers {
             commands.spawn((

@@ -20,6 +20,7 @@ use std::{
     iter::Peekable,
     ops::{Neg, Sub},
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 use tracing::{Level, event, instrument};
@@ -184,7 +185,7 @@ trait OsuPixelTransform {
 }
 
 use crate::{
-    AudioBuffer, EditMode, GameplaySettings,
+    AudioBuffer, EditMode, GameplaySettings, SoundSettings,
     scoreing::Score,
     target::{self, BeatMap, CurveMarker, Marker, TargetMarker, TargetResource},
 };
@@ -286,8 +287,9 @@ fn circle_center(a: Vec2, b: Vec2, c: Vec2) -> Option<Vec2> {
 }
 
 pub fn osu(
-    In(osu_beat_map): In<BeatMapOsu>,
+    In(osu_beat_map): In<Arc<BeatMapOsu>>,
     gameplay_settings: Res<GameplaySettings>,
+    sound_settings: Res<SoundSettings>,
     mut target_resource: ResMut<TargetResource>,
     mut commands: Commands,
     mut audio: ResMut<Assets<AudioBuffer>>,
@@ -430,13 +432,13 @@ pub fn osu(
     };
 
     debug!("leadin: {:?}", leadin);
-    let resource = beat_map.spawn(commands.reborrow());
+    let resource = beat_map.spawn(commands.reborrow(), sound_settings);
     commands.insert_resource(resource);
     commands.insert_resource(Score::new(
         0.0,
         osu_beat_map.difficulty.overall_difficulty,
         osu_beat_map.difficulty_multiplier(),
-        osu_beat_map,
+        osu_beat_map.clone(),
     ));
 }
 

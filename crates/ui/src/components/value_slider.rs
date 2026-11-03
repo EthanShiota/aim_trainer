@@ -1,10 +1,9 @@
 use bevy::{
-    color::palettes::tailwind,
     ecs::{lifecycle::HookContext, world::DeferredWorld},
-    input_focus::{FocusLost, InputFocus},
+    input_focus::FocusLost,
     prelude::*,
     text::{EditableText, TextCursorStyle, TextEditChange},
-    window::{CursorOptions, WindowFocused},
+    window::CursorOptions,
 };
 
 #[derive(Component, Default, Clone)]

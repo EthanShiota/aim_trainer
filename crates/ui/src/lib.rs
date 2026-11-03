@@ -1,14 +1,6 @@
 use bevy::{
-    color::palettes::tailwind,
-    feathers::{
-        FeathersCorePlugin, FeathersPlugins,
-        theme::{ThemeProps, ThemeToken, UiTheme},
-        tokens,
-    },
-    input::common_conditions::input_just_pressed,
-    input_focus::InputFocus,
-    platform::collections::HashMap,
-    prelude::*,
+    color::palettes::tailwind, feathers::FeathersPlugins,
+    input::common_conditions::input_just_pressed, input_focus::InputFocus, prelude::*,
     text::EditableText,
 };
 

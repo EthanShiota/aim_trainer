@@ -2,48 +2,34 @@ use std::{
     error::Error,
     f32::consts::{PI, TAU},
     fs, io,
+    ops::DerefMut,
     path::{Path, PathBuf},
-    sync::Arc,
     time,
 };
 
 use bevy::{
-    app::on_r_inserted,
     camera::{CameraOutputMode, visibility::RenderLayers},
-    color::palettes::{
-        css::{self, BLACK, GREEN, RED, WHITE, YELLOW},
-        tailwind,
-    },
-    ecs::entity_disabling::Disabled,
+    color::palettes::tailwind,
+    ecs::template::TemplateContext,
     feathers::{
         FeathersCorePlugin,
-        controls::{
-            FeathersButton, FeathersListRow, FeathersListView, FeathersMenu, FeathersMenuItem,
-        },
-        font_styles,
+        controls::{FeathersButton, FeathersListRow, FeathersListView},
         theme::{
-            self, InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor,
-            ThemeTextColor, ThemedText,
+            InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor, ThemeTextColor,
+            ThemedText,
         },
-        tokens::{self, BUTTON_TEXT, MENU_BG, MENU_BORDER},
+        tokens::{self, MENU_BG, MENU_BORDER},
     },
-    input::{common_conditions::input_just_pressed, mouse::MouseScrollPixelsPerLine},
-    input_focus::{
-        AutoFocus, InputFocus, directional_navigation::FocusableArea,
-        pointer_focus::PointerFocusPlugin, tab_navigation::TabIndex,
-    },
+    input::common_conditions::input_just_pressed,
+    input_focus::{InputFocus, tab_navigation::TabIndex},
     math::AspectRatio,
-    picking::hover::Hovered,
     prelude::*,
     render::render_resource::BlendState,
-    scene::{Ready, SceneScope},
     settings::SaveSettings,
     tasks::{Task, futures::check_ready},
-    text::{EditableText, TextCursorStyle, TextEdit, TextEditChange},
-    ui::{Checked, InteractionDisabled, Pressed, Selectable, Selected},
+    text::{EditableText, TextCursorStyle, TextEditChange},
     ui_widgets::{
-        self, Activate, Button, ListBox, ListItem, ScrollArea, ScrollAreaPlugin, TextInput,
-        TextInputPlugin, ValueChange, listbox_update_selection,
+        self, Activate, Button, ListItem, TextInput, ValueChange, listbox_update_selection,
     },
     window::PrimaryWindow,
 };
@@ -54,8 +40,8 @@ use ui::spacing;
 use zip::{ZipArchive, result::ZipError};
 
 use crate::{
-    AppState, GameSettings, GameState, GameplaySettings, PlayerCamera, SoundSettings,
-    menus::components::container, scenarios, scoreing::Score,
+    AppState, GameSettings, GameState, GameplaySettings, PlayerCamera, SoundSettings, scenarios,
+    scoreing::Score,
 };
 
 use components::crosshair_settings;
@@ -69,8 +55,11 @@ impl Plugin for MenuPlugin {
             EguiPrimaryContextPass,
             (settings_window).run_if(in_state(AppState::Menu)),
         )
+        .add_systems(Update, poll_async)
         .add_systems(Startup, setup)
-        .add_systems(OnEnter(AppState::Menu), main_menu.spawn())
+        .init_resource::<OsuBeatMaps>()
+        .insert_resource(components::theme())
+        .add_systems(OnEnter(AppState::Menu), main_menu)
         .add_plugins(FeathersCorePlugin)
         .add_systems(
             Update,
@@ -80,8 +69,12 @@ impl Plugin for MenuPlugin {
             |e: On<PointerClick>,
              q: Query<(Option<&Name>, &ComputedNode)>,
              children: Query<&ChildOf>,
-             node_ref: Query<EntityRef>|
+             node_ref: Query<EntityRef>,
+             debug: Res<GlobalUiDebugOptions>|
              -> Result {
+                if !debug.enabled {
+                    return Ok(());
+                }
                 if let Ok((name, node)) = q.get(e.entity) {
                     debug!(?name, size = ?&node.size, content_size = ?&node.content_size);
                     for node in children.iter_ancestors(e.entity) {
@@ -92,7 +85,40 @@ impl Plugin for MenuPlugin {
                 }
                 Ok(())
             },
+        )
+        .add_observer(
+            |_: On<Insert<OsuBeatMaps>>,
+             mut commands: Commands,
+             selector: Query<Entity, With<BeatmapSelector>>,
+             beatmaps: Res<OsuBeatMaps>| {
+                // Should only be one selector
+                let selector = selector.single().unwrap();
+
+                let rows = beatmap_selector_list(&*beatmaps);
+                commands.entity(selector).despawn_children();
+                commands.entity(selector).apply_scene(bsn! {
+                    @FeathersListView {
+                        @rows: bsn_list!({rows})
+                    }
+                });
+            },
         );
+    }
+}
+
+fn poll_async(mut selected_file: Query<(&mut SelectedFile, Entity)>, mut commands: Commands) {
+    // TODO: use res
+    let beatmap_dir = "osu_beatmaps";
+    for (mut file, entity) in selected_file.iter_mut() {
+        if let Some(filepath) = check_ready(&mut file.0) {
+            // Dialog can return None
+            if let Some(path) = filepath {
+                debug!("path: {path:?}");
+                unzip_beatmap(Path::new(beatmap_dir), &path).unwrap();
+                commands.insert_resource(OsuBeatMaps(serialize_beatmaps(beatmap_dir)));
+            }
+            commands.entity(entity).remove::<SelectedFile>();
+        }
     }
 }
 
@@ -240,11 +266,9 @@ fn settings_window(
 fn setup(
     mut commands: Commands,
     mut egui_global_settings: ResMut<EguiGlobalSettings>,
-    q_cam: Query<Entity, With<PlayerCamera>>,
+    _q_cam: Query<Entity, With<PlayerCamera>>,
 ) {
     egui_global_settings.auto_create_primary_context = false;
-
-    commands.insert_resource(components::theme());
 
     // Egui Camera
     commands.spawn((
@@ -275,13 +299,13 @@ struct BeatMapGroup {
     // Lowercase title for search
     title: String,
     display_title: String,
-    versions: Vec<BeatMapOsu>,
+    versions: Vec<Arc<BeatMapOsu>>,
 }
 
 fn main_menu_egui(
     mut contexts: EguiContexts,
     mut commands: Commands,
-    mut beat_maps: Local<Vec<BeatMapGroup>>,
+    mut beat_maps: ResMut<OsuBeatMaps>,
     mut selected_file: Query<(&mut SelectedFile, Entity)>,
     mut search: Local<String>,
 ) -> Result {
@@ -295,7 +319,7 @@ fn main_menu_egui(
     let beatmap_dir = "osu_beatmaps";
     // don't spin when beatmap_dir is empty
     once!(if beat_maps.is_empty() {
-        *beat_maps = serialize_beatmaps(beatmap_dir);
+        **beat_maps = serialize_beatmaps(beatmap_dir);
     });
 
     egui::CentralPanel::default().show(&mut viewport_ui, |ui| {
@@ -310,7 +334,7 @@ fn main_menu_egui(
             .on_hover_text("This reloads beatmaps from the osu_beatmaps directory.")
             .clicked()
         {
-            *beat_maps = serialize_beatmaps(beatmap_dir);
+            **beat_maps = serialize_beatmaps(beatmap_dir);
             // let mut elements = vec![];
             // for map in beat_maps.iter().flatten().step_by(3) {
             //     elements.push(commands.spawn_scene(components::beatmap_version(map)).id());
@@ -331,7 +355,7 @@ fn main_menu_egui(
                 if let Some(path) = filepath {
                     debug!("path: {path:?}");
                     unzip_beatmap(Path::new(beatmap_dir), &path).unwrap();
-                    *beat_maps = serialize_beatmaps(beatmap_dir);
+                    **beat_maps = serialize_beatmaps(beatmap_dir);
                 }
                 commands.entity(entity).remove::<SelectedFile>();
             }
@@ -463,12 +487,14 @@ fn serialize_beatmaps(beatmap_dir: &str) -> Vec<BeatMapGroup> {
         for ent in file.path().read_dir().unwrap() {
             if let Some(map) = ent.ok().and_then(|dir| BeatMapOsu::new(dir.path()).ok()) {
                 count += 1;
-                versions.push(map);
+                versions.push(Arc::new(map));
             }
         }
         if let Some(map) = versions.first() {
             let title = map.metadata.title.to_lowercase();
             let display_title = map.metadata.title.clone();
+            // Sort versions
+            versions.sort_by_key(|entry| entry.hit_objects.len());
             let beat_map_group = BeatMapGroup {
                 title,
                 display_title,
@@ -499,7 +525,12 @@ pub fn score_summery(score: &Score) -> impl Scene {
         ThemeBackgroundColor(tokens::WINDOW_BG)
         InheritableThemeTextColor(tokens::TEXT_MAIN)
         Children [
-            @header()
+            Node {
+                display: Display::Flex,
+                width: vw(100.),
+                padding: px(16),
+                min_height: px(64)
+            }
             ThemedText
             TextFont {
                 font_size: px(32)
@@ -561,10 +592,20 @@ pub fn score_summery(score: &Score) -> impl Scene {
     }
 }
 
-pub fn main_menu() -> impl Scene {
-    let beatmap_dir = "osu_beatmaps";
-    let beat_maps = serialize_beatmaps(beatmap_dir);
+// System to spawn the main menu
+fn main_menu(mut beatmaps: ResMut<OsuBeatMaps>, mut commands: Commands) {
+    once!({
+        if beatmaps.is_empty() {
+            let beatmap_dir = "osu_beatmaps";
+            let beat_maps = serialize_beatmaps(beatmap_dir);
+            **beatmaps = beat_maps;
+        }
+    });
 
+    commands.spawn_scene(main_menu_scene(beatmaps));
+}
+
+fn main_menu_scene(beatmaps: ResMut<OsuBeatMaps>) -> impl Scene {
     bsn! {
         #MainMenu
         DespawnOnExit::<AppState>(AppState::Menu)
@@ -593,7 +634,7 @@ pub fn main_menu() -> impl Scene {
             }
 
             Children [
-                @beatmap_selector(beat_maps)
+                @beatmap_selector(&*beatmaps)
                 --
                 @beatmap_version_selector()
             ]
@@ -607,13 +648,11 @@ fn beatmap_version_selector() -> impl Scene {
             display: Display::Flex,
             flex_direction: FlexDirection::Column,
             width: spacing::space(80.),
-            row_gap: spacing::SM
         }
         on(|e: On<BeatmapGroupSelected>, beatmap_group: Query<&BeatMapGroup>, mut commands: Commands| -> Result {
-            let mut group = beatmap_group.get(e.beatmap_group)?.clone();
+            let group = beatmap_group.get(e.beatmap_group)?;
             // TODO: Better difficulty
-            group.versions.sort_by_key(|map| map.hit_objects.len());
-            let group: Vec<_> = group.versions.into_iter().map(|ver| {
+            let group: Vec<_> = group.versions.iter().cloned().map(|ver| {
                     bsn! {
                         #VersionOption
                         Button
@@ -623,7 +662,8 @@ fn beatmap_version_selector() -> impl Scene {
                         Node {
                             padding: spacing::MD,
                             border: spacing::space(0.5),
-                            align_items: AlignItems::Center
+                            align_items: AlignItems::Center,
+                            margin: UiRect::bottom(spacing::SM),
 
                             width: spacing::space(80.),
                             height: spacing::LG,
@@ -647,9 +687,9 @@ fn beatmap_version_selector() -> impl Scene {
             commands.entity(e.event_target()).apply_scene(
                 bsn! {
                     ThemeBackgroundColor(tokens::MENUITEM_BG)
-                    Children [
-                        {group}
-                    ]
+                    @FeathersListView {
+                        @rows: bsn_list!{{group}}
+                    }
                 }
             );
             Ok(())
@@ -672,9 +712,13 @@ struct BeatmapGroupSelected {
     beatmap_group: Entity,
 }
 
-fn beatmap_selector(maps: Vec<BeatMapGroup>) -> impl Scene {
-    let map_list: Vec<_> = maps
-        .into_iter()
+use std::sync::Arc;
+#[derive(Resource, Default, Clone, Deref, DerefMut)]
+struct OsuBeatMaps(Vec<BeatMapGroup>);
+
+fn beatmap_selector_list(maps: &OsuBeatMaps) -> Vec<impl Scene> {
+    maps.iter()
+        .cloned()
         .map(|beatmap_group| {
             bsn! {
                 #BeatmapGroup
@@ -706,7 +750,10 @@ fn beatmap_selector(maps: Vec<BeatMapGroup>) -> impl Scene {
                 ]
             }
         })
-        .collect();
+        .collect()
+}
+fn beatmap_selector(maps: &OsuBeatMaps) -> impl Scene {
+    let map_list: Vec<_> = beatmap_selector_list(maps);
     bsn! {
             @FeathersListView {
                 @rows: bsn_list!{{map_list}}
@@ -737,6 +784,61 @@ fn header() -> impl Scene {
         }
         ThemedText
         ThemeBackgroundColor(tokens::MENU_BG)
+
+        InheritableThemeTextColor(tokens::BUTTON_TEXT)
+        Children [
+            @import_beatmap()
+            --
+            @reload_beatmaps()
+        ]
+    }
+}
+
+fn import_beatmap() -> impl Scene {
+    bsn! {
+        @FeathersButton
+        Node {
+            padding: spacing::MD,
+            border: spacing::space(0.5),
+            align_items: AlignItems::Center,
+
+            width: spacing::space(80.),
+            height: spacing::LG,
+        }
+        on(|_: On<Activate>, mut commands: Commands| {
+            let thread_pool = bevy::tasks::AsyncComputeTaskPool::get();
+            let task = thread_pool.spawn(async move { FileDialog::new().pick_file() });
+            commands.spawn(SelectedFile(task));
+        })
+        Children [
+            ThemedText
+            Text("Import Beatmap")
+        ]
+    }
+}
+
+fn reload_beatmaps() -> impl Scene {
+    bsn! {
+        @FeathersButton
+
+        Node {
+            padding: spacing::MD,
+            border: spacing::space(0.5),
+            align_items: AlignItems::Center,
+
+            width: spacing::space(80.),
+            height: spacing::LG,
+        }
+        on(|_: On<Activate>, mut commands: Commands| {
+            // TODO: use res
+            let beatmap_dir = "osu_beatmaps";
+            commands.insert_resource(OsuBeatMaps(serialize_beatmaps(beatmap_dir)));
+
+        })
+        Children [
+            ThemedText
+            Text("Reload Beatmaps")
+        ]
     }
 }
 
@@ -766,7 +868,7 @@ fn search_bar() -> impl Scene {
             }
             TextInput
             TabIndex(-1)
-            on(|e: On<TextEditChange>, mut prev: Local<String>, text_edit: Query<&EditableText>, mut beatmaps: Query<(Entity, &BeatMapGroup, &mut Node)>, mut commands: Commands| -> Result {
+            on(|e: On<TextEditChange>, mut prev: Local<String>, text_edit: Query<&EditableText>, mut beatmaps: Query<(Entity, &BeatMapGroup, &mut Node)>, mut _commands: Commands| -> Result {
                 let text_edit = text_edit.get(e.event_target())?;
                 if text_edit.value() == &**prev {
                     // no change

@@ -4,19 +4,14 @@ use bevy::{
     feathers::{
         dark_theme::create_dark_theme,
         theme::{
-            InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor, ThemeProps,
-            ThemeTextColor, ThemedText, UiTheme,
+            InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor, ThemeTextColor,
+            ThemedText, UiTheme,
         },
-        tokens::{self, BUTTON_BG, TEXT_MAIN},
+        tokens::{self},
     },
-    input_focus::{
-        AcquireFocus, AutoFocus, InputFocus, directional_navigation::FocusableArea,
-        tab_navigation::TabIndex,
-    },
-    platform::collections::HashMap,
+    input_focus::tab_navigation::TabIndex,
     prelude::*,
-    text::{EditableText, EditableTextFilter, TextCursorStyle},
-    ui::FocusPolicy,
+    text::{EditableText, TextCursorStyle},
     ui_widgets::TextInput,
 };
 

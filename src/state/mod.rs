@@ -14,6 +14,7 @@ impl Plugin for StatePlugin {
         app.insert_state(AppState::Menu)
             .add_sub_state::<GameState>()
             .add_sub_state::<EditMode>()
+            .add_systems(OnExit(AppState::InGame), transition::game)
             .add_systems(OnEnter(GameState::Paused), transition::pause)
             .add_systems(OnEnter(GameState::Playing), transition::play)
             .add_systems(OnEnter(AppState::UiDebug), transition::ui_debug)
@@ -27,7 +28,7 @@ pub mod transition {
         prelude::*,
         window::{CursorGrabMode, CursorOptions, PrimaryWindow},
     };
-    use fps_camera::GrabMouse;
+    use fps_camera::{FPSCamera, GrabMouse};
 
     use crate::{AudioBuffer, menus, scoreing::Score};
 
@@ -72,5 +73,11 @@ pub mod transition {
         cursor_options.grab_mode = CursorGrabMode::None;
         cursor_options.visible = true;
         commands.spawn_scene(menus::score_summery(&score));
+    }
+
+    pub(crate) fn game(mut fps_camera: Query<&mut FPSCamera>) {
+        let mut cam = fps_camera.single_mut().unwrap();
+        cam.pitch = 0.0;
+        cam.yaw = 0.0;
     }
 }
