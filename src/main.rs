@@ -31,6 +31,7 @@ use bevy::window::{PrimaryWindow, WindowMode};
 
 use crate::crosshair::CrosshairMaterial;
 use crate::input::{Hovered, InputMessage};
+use crate::menus::DisplayInState;
 use crate::scoreing::Score;
 use crate::target::events::TargetHit;
 use crate::target::{
@@ -282,9 +283,10 @@ fn setup_ui(
     let crosshair = crosshair_materials.add(crosshair_settings.crosshair.clone());
     commands.spawn_scene(bsn! {
         MaterialNode<CrosshairMaterial>({crosshair.clone()})
+        DisplayInState::<AppState>(AppState::InGame)
         Node {
             width: percent(100.),
-            height: percent(100.)
+            height: percent(100.),
         }
     });
     commands.insert_resource(Crosshair(crosshair));
@@ -367,8 +369,6 @@ fn light_and_cameras(
         Transform::from_xyz(0., 5., 0.),
         PlayerCamera,
         FPSCamera::default(),
-        DisableOnExit(AppState::InGame),
-        EnableOnEnter(AppState::InGame),
     ));
 }
 

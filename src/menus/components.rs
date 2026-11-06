@@ -16,7 +16,6 @@ use bevy::{
 };
 
 use bevy::settings::SaveSettingsDeferred;
-use parser::BeatMapOsu;
 
 use bevy::text::TextEditChange;
 use ui::space;

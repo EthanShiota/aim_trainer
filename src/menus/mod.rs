@@ -2,7 +2,7 @@ use std::{
     error::Error,
     f32::consts::{PI, TAU},
     fs, io,
-    ops::DerefMut,
+    ops::{DerefMut, RangeInclusive},
     path::{Path, PathBuf},
     time,
 };
@@ -10,10 +10,17 @@ use std::{
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
     color::palettes::tailwind,
-    ecs::template::TemplateContext,
+    ecs::{
+        lifecycle::HookContext,
+        template::{EntityTemplate, OptionTemplate, TemplateContext},
+        world::DeferredWorld,
+    },
     feathers::{
         FeathersCorePlugin,
-        controls::{FeathersButton, FeathersListRow, FeathersListView},
+        controls::{
+            FeathersButton, FeathersListRow, FeathersListView, FeathersNumberInput, NumberFormat,
+            NumberInputPrecision, NumberInputStep, NumberInputUnits, NumberInputValue, SoftLimit,
+        },
         theme::{
             InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor, ThemeTextColor,
             ThemedText,
@@ -21,22 +28,30 @@ use bevy::{
         tokens::{self, MENU_BG, MENU_BORDER},
     },
     input::common_conditions::input_just_pressed,
-    input_focus::{InputFocus, tab_navigation::TabIndex},
+    input_focus::{
+        AutoFocus, InputFocus,
+        tab_navigation::{TabGroup, TabIndex},
+    },
     math::AspectRatio,
+    picking::hover::Hovered,
     prelude::*,
     render::render_resource::BlendState,
-    settings::SaveSettings,
+    scene::Ready,
+    settings::{SaveSettings, SaveSettingsDeferred},
     tasks::{Task, futures::check_ready},
-    text::{EditableText, TextCursorStyle, TextEditChange},
+    text::{EditableText, TextCursorStyle, TextEditChange, TextSection},
+    ui::Selected,
     ui_widgets::{
-        self, Activate, Button, ListItem, TextInput, ValueChange, listbox_update_selection,
+        self, Activate, Button, ControlOrientation, ListItem, SelectedTab, Tab, TabActivation,
+        TabList, TextInput, ValueChange, listbox_update_selection, tablist_self_update,
     },
     window::PrimaryWindow,
 };
 use bevy_egui::egui::Ui;
 use bevy_egui::{egui::UiBuilder, prelude::*};
+use rand::seq::IndexedRandom;
 use rfd::FileDialog;
-use ui::spacing;
+use ui::{space, spacing};
 use zip::{ZipArchive, result::ZipError};
 
 use crate::{
@@ -51,58 +66,58 @@ mod components;
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            EguiPrimaryContextPass,
-            (settings_window).run_if(in_state(AppState::Menu)),
-        )
-        .add_systems(Update, poll_async)
-        .add_systems(Startup, setup)
-        .init_resource::<OsuBeatMaps>()
-        .insert_resource(components::theme())
-        .add_systems(OnEnter(AppState::Menu), main_menu)
-        .add_plugins(FeathersCorePlugin)
-        .add_systems(
-            Update,
-            settings_item_submit.run_if(input_just_pressed(KeyCode::Enter)),
-        )
-        .add_observer(
-            |e: On<PointerClick>,
-             q: Query<(Option<&Name>, &ComputedNode)>,
-             children: Query<&ChildOf>,
-             node_ref: Query<EntityRef>,
-             debug: Res<GlobalUiDebugOptions>|
-             -> Result {
-                if !debug.enabled {
-                    return Ok(());
-                }
-                if let Ok((name, node)) = q.get(e.entity) {
-                    debug!(?name, size = ?&node.size, content_size = ?&node.content_size);
-                    for node in children.iter_ancestors(e.entity) {
-                        if let Ok(name) = node_ref.get(node)?.get_components::<&Name>() {
-                            debug!(?name);
+        app.add_systems(Update, poll_async)
+            .add_systems(Startup, setup)
+            .init_resource::<OsuBeatMaps>()
+            .insert_resource(components::theme())
+            .add_systems(Startup, main_menu)
+            .add_plugins(FeathersCorePlugin)
+            .add_systems(
+                Update,
+                settings_item_submit.run_if(input_just_pressed(KeyCode::Enter)),
+            )
+            .init_state::<ShownTab>()
+            .add_systems(StateTransition, apply_display_in_state::<ShownTab>)
+            .add_systems(StateTransition, apply_display_in_state::<AppState>)
+            .add_systems(Update, style_tab_header)
+            .add_observer(
+                |e: On<PointerClick>,
+                 q: Query<(Option<&Name>, &ComputedNode)>,
+                 children: Query<&ChildOf>,
+                 node_ref: Query<EntityRef>,
+                 debug: Res<GlobalUiDebugOptions>|
+                 -> Result {
+                    if !debug.enabled {
+                        return Ok(());
+                    }
+                    if let Ok((name, node)) = q.get(e.entity) {
+                        debug!(?name, size = ?&node.size, content_size = ?&node.content_size);
+                        for node in children.iter_ancestors(e.entity) {
+                            if let Ok(name) = node_ref.get(node)?.get_components::<&Name>() {
+                                debug!(?name);
+                            }
                         }
                     }
-                }
-                Ok(())
-            },
-        )
-        .add_observer(
-            |_: On<Insert<OsuBeatMaps>>,
-             mut commands: Commands,
-             selector: Query<Entity, With<BeatmapSelector>>,
-             beatmaps: Res<OsuBeatMaps>| {
-                // Should only be one selector
-                let selector = selector.single().unwrap();
+                    Ok(())
+                },
+            )
+            .add_observer(
+                |_: On<Insert<OsuBeatMaps>>,
+                 mut commands: Commands,
+                 selector: Query<Entity, With<BeatmapSelector>>,
+                 beatmaps: Res<OsuBeatMaps>| {
+                    // Should only be one selector
+                    let selector = selector.single().unwrap();
 
-                let rows = beatmap_selector_list(&*beatmaps);
-                commands.entity(selector).despawn_children();
-                commands.entity(selector).apply_scene(bsn! {
-                    @FeathersListView {
-                        @rows: bsn_list!({rows})
-                    }
-                });
-            },
-        );
+                    let rows = beatmap_selector_list(&*beatmaps);
+                    commands.entity(selector).despawn_children();
+                    commands.entity(selector).apply_scene(bsn! {
+                        @FeathersListView {
+                            @rows: bsn_list!({rows})
+                        }
+                    });
+                },
+            );
     }
 }
 
@@ -191,7 +206,148 @@ pub fn pause_menu() -> impl Scene {
     }
 }
 
-fn settings_window(
+#[derive(Component, Clone, Copy, Default)]
+struct SettingsItem;
+fn settings_item(label: &'static str, range: RangeInclusive<f32>) -> impl Scene {
+    bsn! {
+        SettingsItem
+        SoftLimit(bevy::feathers::controls::NumberInputRange::F32(range))
+
+        @FeathersNumberInput {
+            @label_text: label,
+        }
+
+    }
+}
+
+macro_rules! settings_sync {
+    ($res:ty => $access:ident) => {
+        bsn! {
+            template(|ctx| {
+                let val = ctx.resource::<$res>().$access;
+                Ok(NumberInputValue::F32(val as _))
+            })
+            on(|e: On<ReloadSettings>, ctx: Res<$res>, mut commands: Commands| {
+                let val = ctx.$access;
+                commands.entity(e.event_target()).insert(NumberInputValue::F32(val as _));
+            })
+
+            on(|val: On<ValueChange<f32>>, mut commands: Commands, mut res: ResMut<$res>| {
+                if val.is_final {
+                    res.$access = val.value as _;
+                    commands.queue(::bevy::settings::SaveSettingsDeferred::default());
+                }
+                commands.entity(val.event_target()).insert(NumberInputValue::F32(val.value as _));
+
+            })
+        }
+    };
+}
+
+#[derive(EntityEvent, Clone, Copy)]
+struct ReloadSettings(Entity);
+
+fn settings_window() -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Column,
+            width: space(80.),
+            row_gap: spacing::SM,
+        }
+        InheritableThemeTextColor(tokens::TEXT_MAIN)
+
+        Children [
+            @{settings_sync!(SoundSettings => music_volume)}
+            @settings_item("Music Volume", 0.0..=1.0)
+            --
+            @{settings_sync!(SoundSettings => effects_volume)}
+            @settings_item("Effects Volume", 0.0..=1.0)
+            --
+            @{settings_sync!(GameSettings => mouse_sensitivity)}
+            @settings_item("Mouse Sensitivity (in/360)", 0.0..=100.0)
+            --
+            @{settings_sync!(GameSettings => dpi)}
+            NumberInputStep(400.)
+            NumberInputPrecision(0)
+            @settings_item("DPI", 400.0..=8000.0)
+            --
+            @{settings_sync!(GameSettings => fov)}
+            @settings_item("Vertical FOV in radians", 0.0..=PI)
+            --
+            @{settings_sync!(GameplaySettings => target_scale)}
+            @settings_item("Target Scale", 0.0..=2.0)
+            --
+            @FeathersButton
+            on(|e: On<Activate>,
+                mut commands: Commands,
+                q: Query<Has<ConfirmReset>>,
+                q_parent: Query<&ChildOf>,
+                q_children: Query<&Children>,
+                q_settings_item: Query<(),
+                With<SettingsItem>>| -> Result {
+                if q.get(e.event_target())? {
+
+                    commands.insert_resource(GameSettings::default());
+                    commands.insert_resource(SoundSettings::default());
+                    commands.insert_resource(GameplaySettings::default());
+                    commands.queue(SaveSettings::IfChanged);
+                    let p = q_parent.get(e.event_target())?.parent();
+                    let children = q_children.get(p)?;
+                    for child in children {
+                        if q_settings_item.contains(*child) {
+                            commands.entity(*child).trigger(ReloadSettings);
+                        }
+                    }
+                    commands.entity(e.event_target()).remove::<ConfirmReset>();
+
+                } else {
+                    commands.entity(e.event_target()).insert(ConfirmReset);
+                }
+                Ok(())
+
+            })
+            on(|e: On<PointerLeave>, mut commands: Commands| {
+                commands.entity(e.event_target()).try_remove::<ConfirmReset>();
+            })
+            Children [
+                ThemedText
+                Text("Reset Settings")
+            ]
+        ]
+    }
+}
+
+#[derive(Component, Default, Clone, Copy)]
+#[component(on_insert)]
+#[component(on_remove)]
+struct ConfirmReset;
+
+impl ConfirmReset {
+    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
+        let children = world.entity(ctx.entity).get_components::<&Children>();
+        if let Ok(children) = children {
+            let children = children.collection().clone();
+            for text in children.into_iter() {
+                if let Some(mut text) = world.get_mut::<Text>(text) {
+                    text.replace_range(.., "Confirm?");
+                }
+            }
+        }
+    }
+    fn on_remove(mut world: DeferredWorld, ctx: HookContext) {
+        let children = world.entity(ctx.entity).get_components::<&Children>();
+        if let Ok(children) = children {
+            let children = children.collection().clone();
+            for text in children.into_iter() {
+                if let Some(mut text) = world.get_mut::<Text>(text) {
+                    text.replace_range(.., "Reset Settings");
+                }
+            }
+        }
+    }
+}
+
+fn settings_window_egui(
     mut contexts: EguiContexts,
     mut settings: If<ResMut<GameSettings>>,
     mut gameplay_settings: If<ResMut<GameplaySettings>>,
@@ -605,28 +761,56 @@ fn main_menu(mut beatmaps: ResMut<OsuBeatMaps>, mut commands: Commands) {
     commands.spawn_scene(main_menu_scene(beatmaps));
 }
 
+#[derive(Component, Clone, Copy, Default)]
+struct MainMenu;
+
 fn main_menu_scene(beatmaps: ResMut<OsuBeatMaps>) -> impl Scene {
     bsn! {
         #MainMenu
-        DespawnOnExit::<AppState>(AppState::Menu)
+        //DespawnOnExit::<AppState>(AppState::Menu)
+        DisplayInState::<AppState>(AppState::Menu)
 
         Node {
             display: Display::Flex,
             flex_direction: FlexDirection::Column,
             row_gap: spacing::SM,
             justify_items: JustifyItems::Start,
+            overflow: Overflow::hidden(),
             width: vw(100.),
             height: vh(100.),
-
         }
 
         ThemeBackgroundColor(tokens::WINDOW_BG)
+        MainMenu
         Children [
             @header()
             --
+            DisplayInState::<ShownTab>(ShownTab::Main)
+            @main_tab(&*beatmaps)
+            --
+            DisplayInState::<ShownTab>(ShownTab::Settings)
+            @settings_window()
+        ]
+    }
+}
+
+fn main_tab(beatmaps: &OsuBeatMaps) -> impl Scene {
+    bsn! {
+        Node {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            row_gap: spacing::SM,
+            justify_items: JustifyItems::Start,
+            overflow: Overflow::hidden(),
+            width: vw(100.),
+            height: vh(100.),
+        }
+
+        Children [
             @search_bar()
             --
             #SelectorGrid
+
             Node {
                 display: Display::Flex,
                 column_gap: spacing::SM,
@@ -634,7 +818,7 @@ fn main_menu_scene(beatmaps: ResMut<OsuBeatMaps>) -> impl Scene {
             }
 
             Children [
-                @beatmap_selector(&*beatmaps)
+                @beatmap_selector(beatmaps)
                 --
                 @beatmap_version_selector()
             ]
@@ -763,13 +947,138 @@ fn beatmap_selector(maps: &OsuBeatMaps) -> impl Scene {
             BeatmapSelector
 
             on(|event: On<ValueChange<Entity>>, mut commands: Commands, version_selector: Query<Entity, With<BeatmapVersionSelector>>| -> Result {
-                    let selector =  version_selector.single()?;
-                    commands.trigger(BeatmapGroupSelected {entity: selector, beatmap_group: event.value});
-                    Ok(())
-
+                let selector =  version_selector.single()?;
+                commands.trigger(BeatmapGroupSelected {entity: selector, beatmap_group: event.value});
+                Ok(())
             })
             on(listbox_update_selection)
 
+    }
+}
+
+fn style_tab_header(
+    q_header: Query<(Entity, Has<Selected>, &Hovered, &ThemeBorderColor), With<TabHeader>>,
+    mut commands: Commands,
+) {
+    for (entity, selected, hovered, border) in q_header.iter() {
+        let border_token = match (selected, hovered.0) {
+            (true, _) => tokens::FOCUS_RING,
+            (_, true) => tokens::FOCUS_RING,
+            (false, false) => tokens::MENU_BORDER,
+        };
+        if border.0 != border_token {
+            commands
+                .entity(entity)
+                .insert(ThemeBorderColor(border_token));
+        }
+    }
+}
+
+#[derive(Component, Clone, Copy, Default)]
+struct TabHeader;
+fn tab_header(label: &'static str, s: ShownTab) -> impl Scene {
+    bsn! {
+        on(move |_: On<Add<Selected>>, mut commands: Commands| {
+            commands.set_state(s);
+        })
+        Tab
+        TabHeader
+        Hovered
+        ThemeBackgroundColor(tokens::WINDOW_BG)
+        ThemeBorderColor(tokens::MENU_BORDER)
+        Node {
+            align_items: AlignItems::Center,
+            height: percent(100.),
+
+            width: spacing::space(80.),
+            justify_content: JustifyContent::Center,
+            border: px(2.)
+        }
+        Children [
+            Text(label)
+            ThemedText
+            TextFont {
+                font_size: px(28.)
+            }
+
+        ]
+
+    }
+}
+
+#[derive(States, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Default)]
+enum ShownTab {
+    #[default]
+    Main,
+    Settings,
+}
+
+#[derive(Component, Clone, Debug, PartialEq, Eq, Default)]
+#[require(Node)]
+#[component(on_add)]
+pub struct DisplayInState<S: States>(pub S);
+
+impl<S: States> DisplayInState<S> {
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        let state = world.get_resource::<State<S>>().unwrap().get().clone();
+
+        if let Ok((mut node, display_state, prior_display)) = world
+            .entity_mut(ctx.entity)
+            .get_components_mut::<(&mut Node, &DisplayInState<S>, Option<&PriorDisplay>)>()
+        {
+            if state == display_state.0 {
+                if let Some(prior_display) = prior_display {
+                    node.display = prior_display.0;
+                } else {
+                    node.display = Display::Flex;
+                }
+            } else {
+                let prior = node.display;
+                node.display = Display::None;
+                world
+                    .commands()
+                    .entity(ctx.entity)
+                    .insert(PriorDisplay(prior));
+            }
+        }
+    }
+}
+
+#[derive(Component, Clone, Debug)]
+pub struct PriorDisplay(Display);
+
+pub fn apply_display_in_state<S: States>(
+    mut event: MessageReader<StateTransitionEvent<S>>,
+    mut commands: Commands,
+    mut q_display_in_state: Query<(Entity, &mut Node, &DisplayInState<S>, Option<&PriorDisplay>)>,
+) {
+    let Some(msg) = event.read().last() else {
+        return;
+    };
+
+    let StateTransitionEvent {
+        entered,
+        exited,
+        allow_same_state_transitions,
+    } = msg;
+    if entered == exited && !allow_same_state_transitions {
+        return;
+    }
+    let Some(entered) = entered else {
+        return;
+    };
+
+    for (entity, mut node, display_in_state, prior_display) in q_display_in_state.iter_mut() {
+        if &display_in_state.0 == entered {
+            if let Some(display) = prior_display {
+                node.display = display.0;
+            } else {
+                node.display = Display::Flex;
+            }
+        } else if node.display != Display::None {
+            commands.entity(entity).insert(PriorDisplay(node.display));
+            node.display = Display::None;
+        }
     }
 }
 
@@ -779,14 +1088,33 @@ fn header() -> impl Scene {
         Node {
             display: Display::Flex,
             width: vw(100.),
-            padding: px(16),
             min_height: px(64)
         }
         ThemedText
         ThemeBackgroundColor(tokens::MENU_BG)
 
         InheritableThemeTextColor(tokens::BUTTON_TEXT)
+
+        TabGroup
         Children [
+            Node {
+                flex_grow: 1.,
+                height: percent(100.)
+            }
+            TabList {
+                orientation: ControlOrientation::Horizontal,
+                activation: TabActivation::Manual,
+            }
+            SelectedTab(OptionTemplate::Some(#Main))
+            on(tablist_self_update)
+            Children [
+                #Main
+                @tab_header("Main", ShownTab::Main)
+                --
+                #Settings
+                @tab_header("Settings", ShownTab::Settings)
+            ]
+            --
             @import_beatmap()
             --
             @reload_beatmaps()

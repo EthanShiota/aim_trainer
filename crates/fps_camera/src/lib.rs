@@ -40,7 +40,7 @@ impl FPSCameraConfig {
 }
 
 /// Marker trait for fps camera
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Debug)]
 pub struct FPSCamera {
     pub pitch: f32,
     pub yaw: f32,
@@ -76,6 +76,7 @@ fn update(
     }
 
     let (mut state, mut transform) = q_fps_camera.into_inner();
+    debug!(?state);
 
     if mouse_motion.delta != Vec2::ZERO {
         let (dx, dy) = mouse_motion.delta.into();
