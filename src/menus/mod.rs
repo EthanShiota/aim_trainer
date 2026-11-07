@@ -228,7 +228,11 @@ macro_rules! settings_sync {
                 Ok(NumberInputValue::F32(val as _))
             })
             on(|e: On<ReloadSettings>, ctx: Res<$res>, mut commands: Commands| {
-                let val = ctx.$access;
+                let val = if e.reset {
+                    <$res>::default().$access
+                } else {
+                    ctx.$access
+                };
                 commands.entity(e.event_target()).insert(NumberInputValue::F32(val as _));
             })
 
@@ -245,7 +249,10 @@ macro_rules! settings_sync {
 }
 
 #[derive(EntityEvent, Clone, Copy)]
-struct ReloadSettings(Entity);
+struct ReloadSettings {
+    entity: Entity,
+    reset: bool,
+}
 
 fn settings_window() -> impl Scene {
     bsn! {
@@ -295,7 +302,7 @@ fn settings_window() -> impl Scene {
                     let children = q_children.get(p)?;
                     for child in children {
                         if q_settings_item.contains(*child) {
-                            commands.entity(*child).trigger(ReloadSettings);
+                            commands.entity(*child).trigger(|entity| ReloadSettings{entity, reset: false});
                         }
                     }
                     commands.entity(e.event_target()).remove::<ConfirmReset>();
