@@ -1,13 +1,13 @@
 use crate::{
-    AppState, SoundSettings, effects,
+    AppState, SoundSettings,
     input::Hovered,
     scoreing::SliderScorer,
-    target::{self, Active, Marker, TargetMaterial, events::*},
+    target::{Active, events::*},
 };
 
 use crate::scoreing::Score;
-use bevy::{audio::PlaybackMode::Remove, prelude::*};
-use tracing::{Level, event, instrument};
+use bevy::prelude::*;
+use tracing::instrument;
 
 pub struct EffectPlugin;
 

@@ -25,7 +25,6 @@ impl Plugin for StatePlugin {
 pub mod transition {
 
     use bevy::{
-        ecs::entity_disabling::Disabled,
         prelude::*,
         window::{CursorGrabMode, CursorOptions, PrimaryWindow},
     };
@@ -73,10 +72,11 @@ pub mod transition {
         **grab_mode = false;
         cursor_options.grab_mode = CursorGrabMode::None;
         cursor_options.visible = true;
-        commands.spawn_scene(menus::score_summery(&score));
+        commands.spawn_scene(menus::score_summery_menu(&score));
     }
 
     pub(crate) fn game(mut fps_camera: Single<(&mut FPSCamera, &mut Transform)>) {
+        // reset camera when entering game
         let (mut cam, mut transform) = fps_camera.into_inner();
         cam.pitch = 0.0;
         cam.yaw = 0.0;

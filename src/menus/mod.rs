@@ -1,8 +1,6 @@
 use std::{
     error::Error,
-    f32::consts::{PI, TAU},
     fs, io,
-    ops::{DerefMut, RangeInclusive},
     path::{Path, PathBuf},
     time,
 };
@@ -10,17 +8,11 @@ use std::{
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
     color::palettes::tailwind,
-    ecs::{
-        lifecycle::HookContext,
-        template::{EntityTemplate, OptionTemplate, TemplateContext},
-        world::DeferredWorld,
-    },
+    ecs::template::OptionTemplate,
     feathers::{
         FeathersCorePlugin,
-        controls::{
-            FeathersButton, FeathersListRow, FeathersListView, FeathersNumberInput, NumberFormat,
-            NumberInputPrecision, NumberInputStep, NumberInputUnits, NumberInputValue, SoftLimit,
-        },
+        controls::{FeathersButton, FeathersListRow, FeathersListView},
+        font_styles::InheritableFont,
         theme::{
             InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor, ThemeTextColor,
             ThemedText,
@@ -28,49 +20,45 @@ use bevy::{
         tokens::{self, MENU_BG, MENU_BORDER},
     },
     input::common_conditions::input_just_pressed,
-    input_focus::{
-        AutoFocus, InputFocus,
-        tab_navigation::{TabGroup, TabIndex},
-    },
-    math::AspectRatio,
+    input_focus::tab_navigation::{TabGroup, TabIndex},
     picking::hover::Hovered,
     prelude::*,
     render::render_resource::BlendState,
-    scene::Ready,
-    settings::{SaveSettings, SaveSettingsDeferred},
+    state::state::FreelyMutableState,
     tasks::{Task, futures::check_ready},
-    text::{EditableText, TextCursorStyle, TextEditChange, TextSection},
+    text::{EditableText, TextCursorStyle, TextEditChange},
     ui::Selected,
     ui_widgets::{
-        self, Activate, Button, ControlOrientation, ListItem, SelectedTab, Tab, TabActivation,
-        TabList, TextInput, ValueChange, listbox_update_selection, tablist_self_update,
+        Activate, ActivateOnPress, Button, ControlOrientation, ListItem, SelectedTab, Tab,
+        TabActivation, TabList, TextInput, ValueChange, listbox_update_selection,
+        tablist_self_update,
     },
-    window::PrimaryWindow,
 };
-use bevy_egui::egui::Ui;
-use bevy_egui::{egui::UiBuilder, prelude::*};
-use rand::seq::IndexedRandom;
+use bevy_egui::prelude::*;
 use rfd::FileDialog;
-use ui::{space, spacing};
+use ui::spacing;
 use zip::{ZipArchive, result::ZipError};
 
 use crate::{
-    AppState, GameSettings, GameState, GameplaySettings, PlayerCamera, SoundSettings, scenarios,
-    scoreing::Score,
+    AppState, GameState, PlayerCamera, menus::components::ShownTab, scenarios, scoreing::Score,
 };
+
+pub use ui::{DisplayInState, apply_display_in_state};
 
 use components::crosshair_settings;
 use parser::BeatMapOsu;
 
 mod components;
+mod settings;
+use settings::*;
+
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, poll_async)
-            .add_systems(Startup, setup)
-            .init_resource::<OsuBeatMaps>()
+        app.init_resource::<OsuBeatMaps>()
             .insert_resource(components::theme())
-            .add_systems(Startup, main_menu)
+            .add_systems(Startup, (setup_egui_camera, main_menu_spawner))
+            .add_systems(Update, load_selected_file_async)
             .add_plugins(FeathersCorePlugin)
             .add_systems(
                 Update,
@@ -80,6 +68,7 @@ impl Plugin for MenuPlugin {
             .add_systems(StateTransition, apply_display_in_state::<ShownTab>)
             .add_systems(StateTransition, apply_display_in_state::<AppState>)
             .add_systems(Update, style_tab_header)
+            // TODO: move to debug
             .add_observer(
                 |e: On<PointerClick>,
                  q: Query<(Option<&Name>, &ComputedNode)>,
@@ -109,7 +98,7 @@ impl Plugin for MenuPlugin {
                     // Should only be one selector
                     let selector = selector.single().unwrap();
 
-                    let rows = beatmap_selector_list(&*beatmaps);
+                    let rows = beatmap_selector_list(&beatmaps);
                     commands.entity(selector).despawn_children();
                     commands.entity(selector).apply_scene(bsn! {
                         @FeathersListView {
@@ -121,240 +110,7 @@ impl Plugin for MenuPlugin {
     }
 }
 
-fn poll_async(mut selected_file: Query<(&mut SelectedFile, Entity)>, mut commands: Commands) {
-    // TODO: use res
-    let beatmap_dir = "osu_beatmaps";
-    for (mut file, entity) in selected_file.iter_mut() {
-        if let Some(filepath) = check_ready(&mut file.0) {
-            // Dialog can return None
-            if let Some(path) = filepath {
-                debug!("path: {path:?}");
-                unzip_beatmap(Path::new(beatmap_dir), &path).unwrap();
-                commands.insert_resource(OsuBeatMaps(serialize_beatmaps(beatmap_dir)));
-            }
-            commands.entity(entity).remove::<SelectedFile>();
-        }
-    }
-}
-
-fn settings_item_submit(mut focus: ResMut<InputFocus>, settings_item: Query<&EditableText>) {
-    if let Some(focus_ent) = focus.get()
-        && settings_item.contains(focus_ent)
-    {
-        focus.clear();
-    }
-}
-fn button(text: &str) -> impl Scene {
-    bsn! {
-        @ui::card(true)
-        Node {
-            width: percent(100.),
-            height: percent(50.),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            justify_items: JustifyItems::Center
-        }
-        ThemeBackgroundColor(tokens::BUTTON_BG)
-        on(|e: On<PointerOver>, mut commands: Commands| {
-            commands.entity(e.event_target()).insert(ThemeBackgroundColor(tokens::BUTTON_BG_HOVER));
-        })
-        on(|e: On<PointerOut>, mut commands: Commands| {
-            commands.entity(e.event_target()).insert(ThemeBackgroundColor(tokens::BUTTON_BG));
-        })
-        Children [
-            Node {justify_content: JustifyContent::Center}
-            ThemedText
-            Text(text)
-        ]
-    }
-}
-pub fn pause_menu() -> impl Scene {
-    bsn! {
-        Node {
-            display: Display::Flex,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            width: percent(100.),
-            height: percent(100.)
-        }
-        DespawnOnExit::<GameState>(GameState::Paused)
-        Children [
-            @crosshair_settings()
-            --
-            Node {
-                 flex_direction: FlexDirection::Column,
-                 width: ui::space(64.),
-                 height: ui::space(48.),
-                 align_items: AlignItems::Center,
-                 justify_content: JustifyContent::SpaceBetween,
-                 border: ui::space(2.),
-            }
-            ThemeBorderColor(MENU_BORDER)
-            ThemeBackgroundColor(MENU_BG)
-            Children [
-                    @button("Exit")
-                    on(|_: On<PointerPress>, mut commands: Commands| {
-                        commands.set_state(GameState::Playing);
-                    })
-                    --
-                    @button("Menu")
-                    on(|_: On<PointerPress>, mut commands: Commands| {
-                        commands.set_state(AppState::Menu);
-                    })
-            ]
-        ]
-    }
-}
-
-#[derive(Component, Clone, Copy, Default)]
-struct SettingsItem;
-fn settings_item(label: &'static str, range: RangeInclusive<f32>) -> impl Scene {
-    bsn! {
-        SettingsItem
-        SoftLimit(bevy::feathers::controls::NumberInputRange::F32(range))
-
-        @FeathersNumberInput {
-            @label_text: label,
-        }
-
-    }
-}
-
-macro_rules! settings_sync {
-    ($res:ty => $access:ident) => {
-        bsn! {
-            template(|ctx| {
-                let val = ctx.resource::<$res>().$access;
-                Ok(NumberInputValue::F32(val as _))
-            })
-            on(|e: On<ReloadSettings>, ctx: Res<$res>, mut commands: Commands| {
-                let val = if e.reset {
-                    <$res>::default().$access
-                } else {
-                    ctx.$access
-                };
-                commands.entity(e.event_target()).insert(NumberInputValue::F32(val as _));
-            })
-
-            on(|val: On<ValueChange<f32>>, mut commands: Commands, mut res: ResMut<$res>| {
-                if val.is_final {
-                    res.$access = val.value as _;
-                    commands.queue(::bevy::settings::SaveSettingsDeferred::default());
-                }
-                commands.entity(val.event_target()).insert(NumberInputValue::F32(val.value as _));
-
-            })
-        }
-    };
-}
-
-#[derive(EntityEvent, Clone, Copy)]
-struct ReloadSettings {
-    entity: Entity,
-    reset: bool,
-}
-
-fn settings_window() -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Column,
-            width: space(80.),
-            row_gap: spacing::SM,
-        }
-        InheritableThemeTextColor(tokens::TEXT_MAIN)
-
-        Children [
-            @{settings_sync!(SoundSettings => music_volume)}
-            @settings_item("Music Volume", 0.0..=1.0)
-            --
-            @{settings_sync!(SoundSettings => effects_volume)}
-            @settings_item("Effects Volume", 0.0..=1.0)
-            --
-            @{settings_sync!(GameSettings => mouse_sensitivity)}
-            @settings_item("Mouse Sensitivity (in/360)", 0.0..=100.0)
-            --
-            @{settings_sync!(GameSettings => dpi)}
-            NumberInputStep(400.)
-            NumberInputPrecision(0)
-            @settings_item("DPI", 400.0..=8000.0)
-            --
-            @{settings_sync!(GameSettings => fov)}
-            @settings_item("Vertical FOV in radians", 0.0..=PI)
-            --
-            @{settings_sync!(GameplaySettings => target_scale)}
-            @settings_item("Target Scale", 0.0..=2.0)
-            --
-            @FeathersButton
-            on(|e: On<Activate>,
-                mut commands: Commands,
-                q: Query<Has<ConfirmReset>>,
-                q_parent: Query<&ChildOf>,
-                q_children: Query<&Children>,
-                q_settings_item: Query<(),
-                With<SettingsItem>>| -> Result {
-                if q.get(e.event_target())? {
-
-                    commands.insert_resource(GameSettings::default());
-                    commands.insert_resource(SoundSettings::default());
-                    commands.insert_resource(GameplaySettings::default());
-                    commands.queue(SaveSettings::IfChanged);
-                    let p = q_parent.get(e.event_target())?.parent();
-                    let children = q_children.get(p)?;
-                    for child in children {
-                        if q_settings_item.contains(*child) {
-                            commands.entity(*child).trigger(|entity| ReloadSettings{entity, reset: false});
-                        }
-                    }
-                    commands.entity(e.event_target()).remove::<ConfirmReset>();
-
-                } else {
-                    commands.entity(e.event_target()).insert(ConfirmReset);
-                }
-                Ok(())
-
-            })
-            on(|e: On<PointerLeave>, mut commands: Commands| {
-                commands.entity(e.event_target()).try_remove::<ConfirmReset>();
-            })
-            Children [
-                ThemedText
-                Text("Reset Settings")
-            ]
-        ]
-    }
-}
-
-#[derive(Component, Default, Clone, Copy)]
-#[component(on_insert)]
-#[component(on_remove)]
-struct ConfirmReset;
-
-impl ConfirmReset {
-    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        let children = world.entity(ctx.entity).get_components::<&Children>();
-        if let Ok(children) = children {
-            let children = children.collection().clone();
-            for text in children.into_iter() {
-                if let Some(mut text) = world.get_mut::<Text>(text) {
-                    text.replace_range(.., "Confirm?");
-                }
-            }
-        }
-    }
-    fn on_remove(mut world: DeferredWorld, ctx: HookContext) {
-        let children = world.entity(ctx.entity).get_components::<&Children>();
-        if let Ok(children) = children {
-            let children = children.collection().clone();
-            for text in children.into_iter() {
-                if let Some(mut text) = world.get_mut::<Text>(text) {
-                    text.replace_range(.., "Reset Settings");
-                }
-            }
-        }
-    }
-}
-
-fn setup(
+fn setup_egui_camera(
     mut commands: Commands,
     mut egui_global_settings: ResMut<EguiGlobalSettings>,
     _q_cam: Query<Entity, With<PlayerCamera>>,
@@ -384,13 +140,23 @@ fn setup(
 #[derive(Component)]
 struct SelectedFile(Task<Option<PathBuf>>);
 
-#[derive(Clone, Component)]
-#[component(immutable)]
-struct BeatMapGroup {
-    // Lowercase title for search
-    title: String,
-    display_title: String,
-    versions: Vec<Arc<BeatMapOsu>>,
+fn load_selected_file_async(
+    mut selected_file: Query<(&mut SelectedFile, Entity)>,
+    mut commands: Commands,
+) {
+    // TODO: use res
+    let beatmap_dir = "osu_beatmaps";
+    for (mut file, entity) in selected_file.iter_mut() {
+        if let Some(filepath) = check_ready(&mut file.0) {
+            // Dialog can return None
+            if let Some(path) = filepath {
+                debug!("path: {path:?}");
+                unzip_beatmap(Path::new(beatmap_dir), &path).unwrap();
+                commands.insert_resource(OsuBeatMaps(serialize_beatmaps(beatmap_dir)));
+            }
+            commands.entity(entity).remove::<SelectedFile>();
+        }
+    }
 }
 
 fn unzip_beatmap(base_dir: &Path, beatmap_path: &Path) -> Result<(), Box<dyn Error>> {
@@ -522,7 +288,75 @@ fn serialize_beatmaps(beatmap_dir: &str) -> Vec<BeatMapGroup> {
     beat_maps
 }
 
-pub fn score_summery(score: &Score) -> impl Scene {
+pub fn pause_menu() -> impl Scene {
+    bsn! {
+        Node {
+            display: Display::Flex,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            width: percent(100.),
+            height: percent(100.)
+        }
+        DespawnOnExit::<GameState>(GameState::Paused)
+        Children [
+            @crosshair_settings()
+            --
+            Node {
+                 flex_direction: FlexDirection::Column,
+                 width: ui::space(64.),
+                 height: ui::space(48.),
+                 align_items: AlignItems::Center,
+                 justify_content: JustifyContent::SpaceBetween,
+            }
+            @ui::card(true)
+            ThemeBorderColor(MENU_BORDER)
+            ThemeBackgroundColor(MENU_BG)
+            Children [
+                    @pause_menu_button("Exit")
+                    on(|_: On<Activate>, mut commands: Commands| {
+                        commands.set_state(GameState::Playing);
+                    })
+                    --
+                    @pause_menu_button("Menu")
+                    on(|_: On<Activate>, mut commands: Commands| {
+                        commands.set_state(AppState::Menu);
+                    })
+            ]
+        ]
+    }
+}
+
+fn pause_menu_button(label: &'static str) -> impl Scene {
+    bsn! {
+        @FeathersButton {
+            @caption: bsn_list! {
+                ThemedText
+                Text(label)
+            }
+        }
+        InheritableFont {
+            font_size: rem(2.),
+            weight: FontWeight(800)
+        }
+        Node {
+            width: percent(100.),
+            flex_grow: 1.
+        }
+        @ui::card(true)
+    }
+}
+
+#[derive(Clone, Component)]
+#[component(immutable)]
+struct BeatMapGroup {
+    // Lowercase title for search
+    title: String,
+    display_title: String,
+    versions: Vec<Arc<BeatMapOsu>>,
+}
+
+// After game is over
+pub fn score_summery_menu(score: &Score) -> impl Scene {
     let acc = score.hit_counts.accuracy();
     let map_name = &score.metadata.metadata.title;
     bsn! {
@@ -533,6 +367,7 @@ pub fn score_summery(score: &Score) -> impl Scene {
             display: Display::Flex,
             flex_direction: FlexDirection::Column
         }
+        ThemeBorderColor(tokens::MENU_BORDER)
         ThemeBackgroundColor(tokens::WINDOW_BG)
         InheritableThemeTextColor(tokens::TEXT_MAIN)
         Children [
@@ -546,6 +381,7 @@ pub fn score_summery(score: &Score) -> impl Scene {
             TextFont {
                 font_size: px(32)
             }
+            ThemeBorderColor(tokens::MENU_BORDER)
             Text(map_name)
             --
             Node {
@@ -560,7 +396,8 @@ pub fn score_summery(score: &Score) -> impl Scene {
                     border: px(3),
                     padding: px(20)
                 }
-                BorderColor::all(tailwind::GRAY_100)
+                ThemeBorderColor(tokens::MENU_BORDER)
+                @ui::card(true)
                 --
                 Node {
                     display: Display::Flex,
@@ -573,6 +410,21 @@ pub fn score_summery(score: &Score) -> impl Scene {
                 }
                 Text({format!("Score {}\nAccuracy {acc:.4}", score.points)})
                 Children [
+                    ThemeBorderColor(tokens::TEXT_MAIN)
+                    @FeathersButton {
+                        @caption: bsn_list! {
+                            ThemedText
+                            Node {
+                                align_self: AlignSelf::Center,
+                                justify_self: JustifySelf::Center
+                            }
+                            ThemedText
+                            Text("Menu")
+                            TextLayout {
+                                justify: Justify::Center,
+                            }
+                        }
+                    }
                     Node {
                         width: px(300),
                         height: px(64),
@@ -580,21 +432,9 @@ pub fn score_summery(score: &Score) -> impl Scene {
                         display: Display::Grid,
                         align_self: AlignSelf::End,
                     }
-                    ThemeBorderColor(tokens::TEXT_MAIN)
-                    ui_widgets::Button
-                    ThemedText
-                    Children [
-                        Node {
-                            align_self: AlignSelf::Center,
-                            justify_self: JustifySelf::Center
-                        }
-                        ThemedText
-                        Text("Menu")
-                        TextLayout {
-                            justify: Justify::Center,
-                        }
-                    ]
-                    on(|_: On<PointerPress>, mut commands: Commands|{
+                    @ui::card(true)
+
+                    on(|_: On<Activate>, mut commands: Commands|{
                         commands.set_state(AppState::Menu);
                     })
                 ]
@@ -603,8 +443,8 @@ pub fn score_summery(score: &Score) -> impl Scene {
     }
 }
 
-// System to spawn the main menu
-fn main_menu(mut beatmaps: ResMut<OsuBeatMaps>, mut commands: Commands) {
+// System to spawn the main menu, loads beatmaps from files
+fn main_menu_spawner(mut beatmaps: ResMut<OsuBeatMaps>, mut commands: Commands) {
     once!({
         if beatmaps.is_empty() {
             let beatmap_dir = "osu_beatmaps";
@@ -622,7 +462,6 @@ struct MainMenu;
 fn main_menu_scene(beatmaps: ResMut<OsuBeatMaps>) -> impl Scene {
     bsn! {
         #MainMenu
-        //DespawnOnExit::<AppState>(AppState::Menu)
         DisplayInState::<AppState>(AppState::Menu)
 
         Node {
@@ -640,11 +479,21 @@ fn main_menu_scene(beatmaps: ResMut<OsuBeatMaps>) -> impl Scene {
         Children [
             @header()
             --
-            DisplayInState::<ShownTab>(ShownTab::Main)
-            @main_tab(&*beatmaps)
-            --
-            DisplayInState::<ShownTab>(ShownTab::Settings)
-            @settings_window()
+            Node {
+                flex_direction: FlexDirection::Column,
+                justify_items: JustifyItems::Start,
+                align_items: AlignItems::Start,
+                overflow: Overflow::hidden(),
+                width: percent(100.),
+                height: percent(100.),
+            }
+            Children [
+                DisplayInState::<ShownTab>(ShownTab::Main)
+                @main_tab(&*beatmaps)
+                --
+                DisplayInState::<ShownTab>(ShownTab::Settings)
+                @settings_tab()
+            ]
         ]
     }
 }
@@ -657,9 +506,11 @@ fn main_tab(beatmaps: &OsuBeatMaps) -> impl Scene {
             row_gap: spacing::SM,
             justify_items: JustifyItems::Start,
             overflow: Overflow::hidden(),
-            width: vw(100.),
-            height: vh(100.),
+            width: percent(100.),
+            height: percent(100.),
         }
+        ThemeBorderColor(tokens::MENU_BORDER)
+        @ui::card(true)
 
         Children [
             @search_bar()
@@ -706,6 +557,7 @@ fn beatmap_version_selector() -> impl Scene {
 
                             width: spacing::space(80.),
                             height: spacing::LG,
+                            overflow: Overflow::hidden(),
                         }
                         on(move |_: On<Activate>, mut commands: Commands| {
                             commands.set_state(AppState::InGame);
@@ -723,14 +575,12 @@ fn beatmap_version_selector() -> impl Scene {
                     }
             }).collect();
             commands.entity(e.event_target()).despawn_children();
-            commands.entity(e.event_target()).apply_scene(
-                bsn! {
-                    ThemeBackgroundColor(tokens::MENUITEM_BG)
-                    @FeathersListView {
-                        @rows: bsn_list!{{group}}
-                    }
-                }
-            );
+            commands.entity(e.event_target()).apply_scene(bsn! {
+                Children [
+                    {group}
+                ]
+
+            });
             Ok(())
 
         })
@@ -861,82 +711,6 @@ fn tab_header(label: &'static str, s: ShownTab) -> impl Scene {
     }
 }
 
-#[derive(States, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Default)]
-enum ShownTab {
-    #[default]
-    Main,
-    Settings,
-}
-
-#[derive(Component, Clone, Debug, PartialEq, Eq, Default)]
-#[require(Node)]
-#[component(on_add)]
-pub struct DisplayInState<S: States>(pub S);
-
-impl<S: States> DisplayInState<S> {
-    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
-        let state = world.get_resource::<State<S>>().unwrap().get().clone();
-
-        if let Ok((mut node, display_state, prior_display)) = world
-            .entity_mut(ctx.entity)
-            .get_components_mut::<(&mut Node, &DisplayInState<S>, Option<&PriorDisplay>)>()
-        {
-            if state == display_state.0 {
-                if let Some(prior_display) = prior_display {
-                    node.display = prior_display.0;
-                } else {
-                    node.display = Display::Flex;
-                }
-            } else {
-                let prior = node.display;
-                node.display = Display::None;
-                world
-                    .commands()
-                    .entity(ctx.entity)
-                    .insert(PriorDisplay(prior));
-            }
-        }
-    }
-}
-
-#[derive(Component, Clone, Debug)]
-pub struct PriorDisplay(Display);
-
-pub fn apply_display_in_state<S: States>(
-    mut event: MessageReader<StateTransitionEvent<S>>,
-    mut commands: Commands,
-    mut q_display_in_state: Query<(Entity, &mut Node, &DisplayInState<S>, Option<&PriorDisplay>)>,
-) {
-    let Some(msg) = event.read().last() else {
-        return;
-    };
-
-    let StateTransitionEvent {
-        entered,
-        exited,
-        allow_same_state_transitions,
-    } = msg;
-    if entered == exited && !allow_same_state_transitions {
-        return;
-    }
-    let Some(entered) = entered else {
-        return;
-    };
-
-    for (entity, mut node, display_in_state, prior_display) in q_display_in_state.iter_mut() {
-        if &display_in_state.0 == entered {
-            if let Some(display) = prior_display {
-                node.display = display.0;
-            } else {
-                node.display = Display::Flex;
-            }
-        } else if node.display != Display::None {
-            commands.entity(entity).insert(PriorDisplay(node.display));
-            node.display = Display::None;
-        }
-    }
-}
-
 fn header() -> impl Scene {
     bsn! {
         #MenuHeader
@@ -970,9 +744,13 @@ fn header() -> impl Scene {
                 @tab_header("Settings", ShownTab::Settings)
             ]
             --
-            @import_beatmap()
-            --
-            @reload_beatmaps()
+            ThemeBorderColor(tokens::MENU_BORDER)
+            @ui::card(true)
+            Children [
+                @import_beatmap()
+                --
+                @reload_beatmaps()
+            ]
         ]
     }
 }
@@ -1039,6 +817,8 @@ fn search_bar() -> impl Scene {
                 width: em(50),
                 padding: em(0.5)
             }
+            ThemeBorderColor(tokens::MENU_BORDER)
+            @ui::card(true)
             TextCursorStyle
             ThemeBackgroundColor(tokens::TEXT_INPUT_BG)
             ThemeTextColor(tokens::TEXT_INPUT_TEXT)

@@ -37,7 +37,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
   signed_distance = dot;
 
   // Hairs
-  let halfwidth = vec2f(hair_length, hair_width);
+  let halfwidth = vec2f(hair_width, hair_length);
   for (var i: u32 = 0; i < num_hairs;i++) {
     let angle = (6.283185307 / f32(num_hairs)) * f32(i) + hair_rotation;
     let hair = sdfBox(rotate2D(point, angle) + vec2(0.,gap), halfwidth);

@@ -1,7 +1,13 @@
 use bevy::{
     color::palettes::tailwind,
-    ecs::{system::IntoObserverSystem, template::TemplateContext},
+    ecs::{
+        lifecycle::HookContext,
+        system::IntoObserverSystem,
+        template::{FnTemplate, TemplateContext},
+        world::DeferredWorld,
+    },
     feathers::{
+        controls::{FeathersNumberInput, NumberInputValue},
         dark_theme::create_dark_theme,
         theme::{
             InheritableThemeTextColor, ThemeBackgroundColor, ThemeBorderColor, ThemeTextColor,
@@ -18,7 +24,7 @@ use bevy::{
 use bevy::settings::SaveSettingsDeferred;
 
 use bevy::text::TextEditChange;
-use ui::space;
+use ui::{space, spacing};
 
 use crate::{Crosshair, crosshair::CrosshairMaterial};
 
@@ -45,57 +51,50 @@ pub fn theme() -> UiTheme {
 
     UiTheme(base)
 }
-pub fn container() -> impl Scene {
-    bsn! {
-        Node {
-            display: Display::Flex,
-            flex_direction: FlexDirection::Column,
-            width: percent(50.),
-            height: percent(100.),
-        }
-    }
-}
 
 // settings_item_crosshair!("label", u32 => accesser)
 macro_rules! settings_item_crosshair {
     ($label:expr, $parse_type:ty => $accesser:ident) => {
-        settings_item(
+        settings_item_crosshair(
             $label,
-            |ctx| {
+            template(|ctx| {
                 let crosshair_handle = ctx.resource::<Crosshair>().0.id();
                 let crosshair_assets = ctx.resource_mut::<Assets<CrosshairMaterial>>();
-                crosshair_assets
-                    .get(crosshair_handle)
-                    .map(|mat| mat.$accesser.to_string())
-            },
-            |e: On<TextEditChange>,
-             mut q_text: Query<&mut EditableText>,
+                Ok(::bevy::feathers::controls::NumberInputValue::F32(
+                    crosshair_assets
+                        .get(crosshair_handle)
+                        .map(|mat| mat.$accesser)
+                        .unwrap_or_default() as _,
+                ))
+            }),
+            |e: On<::bevy::ui_widgets::ValueChange<f32>>,
              mut mat: ResMut<Assets<CrosshairMaterial>>,
              mut commands: Commands,
              mut settings: ResMut<crate::CrosshairSettings>| {
-                let Ok(text) = q_text.get_mut(e.event_target()) else {
-                    return;
-                };
-                let value = text.value().to_string().parse::<$parse_type>();
-                if let Ok(val) = value {
-                    for (_, m) in mat.iter_mut() {
-                        m.$accesser = val;
-                    }
-                    settings.crosshair.$accesser = val;
+                let value = e.value;
+                for (_, m) in mat.iter_mut() {
+                    m.$accesser = value as _;
+                }
+                if e.is_final {
+                    settings.crosshair.$accesser = value as _;
                     commands.queue(SaveSettingsDeferred::default());
                 }
+                commands
+                    .entity(e.event_target())
+                    .insert(::bevy::feathers::controls::NumberInputValue::F32(e.value));
             },
         )
     };
 }
 
-pub fn settings_item<
+pub fn settings_item_crosshair<
     I: IntoObserverSystem<E, M> + Clone + Sync + Send,
     E: EntityEvent,
     M: 'static,
+    F: Fn(&mut TemplateContext) -> Result<NumberInputValue> + Clone + Send + Sync + 'static,
 >(
     label: &str,
-    default_value: impl Fn(&mut TemplateContext) -> Option<String> + Send + Sync + 'static + Clone,
+    default_value: FnTemplate<F, NumberInputValue>,
     update_function: I,
 ) -> impl Scene {
     bsn! {
@@ -103,27 +102,24 @@ pub fn settings_item<
             border: UiRect::bottom(space(0.5)),
             display: Display::Flex,
             flex_direction: FlexDirection::Row,
-            justify_content: JustifyContent::SpaceBetween,
+            justify_content: JustifyContent::Start,
             width: percent(100.),
+            overflow: Overflow::hidden(),
         }
         ThemeBorderColor(tokens::MENU_BORDER)
         InheritableThemeTextColor(tokens::BUTTON_TEXT)
         Children [
+            Node {
+                width: space(60.),
+            }
             Text(label)
             ThemedText
             --
-            Node {
-                flex_grow: 1.,
-            }
             ThemedText
-            template(move |ctx| {
-                Ok(EditableText::new(default_value(ctx).unwrap_or_default()))
-            })
-            TextInput
+            @FeathersNumberInput
+            @default_value
+
             on(update_function)
-            // HACK: Allows for pointer focus
-            TabIndex(0)
-            TextCursorStyle
         ]
 
     }
@@ -137,7 +133,8 @@ pub fn crosshair_settings() -> impl Scene {
             right: px(100.),
             width: px(600.),
             display: Display::Flex,
-            flex_direction: FlexDirection::Column
+            flex_direction: FlexDirection::Column,
+            row_gap: spacing::SM,
         }
         @ui::card(true)
         ThemeBackgroundColor(tokens::MENU_BG)
@@ -171,4 +168,11 @@ pub fn crosshair_settings() -> impl Scene {
             })
         ]
     }
+}
+
+#[derive(States, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Default)]
+pub enum ShownTab {
+    #[default]
+    Main,
+    Settings,
 }

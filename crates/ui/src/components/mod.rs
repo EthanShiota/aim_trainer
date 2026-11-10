@@ -1,6 +1,8 @@
+mod display_in_state;
 mod layout;
 mod value_slider;
 
+pub use display_in_state::{DisplayInState, apply_display_in_state};
 pub use layout::*;
 pub use value_slider::ValueSlider;
 
@@ -29,7 +31,8 @@ pub fn card(border: bool) -> impl Scene {
     bsn! {
         Node {
             padding: spacing::SM,
-            border: {if border {space(1.)} else {space(0.)}},
+            border: {if border {px(2.)} else {space(0.)}},
+            border_radius: BorderRadius::all(px(10.))
         }
     }
 }
