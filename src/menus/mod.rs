@@ -7,7 +7,6 @@ use std::{
 
 use bevy::{
     camera::{CameraOutputMode, visibility::RenderLayers},
-    color::palettes::tailwind,
     ecs::template::OptionTemplate,
     feathers::{
         FeathersCorePlugin,
@@ -19,19 +18,16 @@ use bevy::{
         },
         tokens::{self, MENU_BG, MENU_BORDER},
     },
-    input::common_conditions::input_just_pressed,
     input_focus::tab_navigation::{TabGroup, TabIndex},
     picking::hover::Hovered,
     prelude::*,
     render::render_resource::BlendState,
-    state::state::FreelyMutableState,
     tasks::{Task, futures::check_ready},
     text::{EditableText, TextCursorStyle, TextEditChange},
     ui::Selected,
     ui_widgets::{
-        Activate, ActivateOnPress, Button, ControlOrientation, ListItem, SelectedTab, Tab,
-        TabActivation, TabList, TextInput, ValueChange, listbox_update_selection,
-        tablist_self_update,
+        Activate, Button, ControlOrientation, ListItem, SelectedTab, Tab, TabActivation, TabList,
+        TextInput, ValueChange, listbox_update_selection, tablist_self_update,
     },
 };
 use bevy_egui::prelude::*;
@@ -60,14 +56,10 @@ impl Plugin for MenuPlugin {
             .add_systems(Startup, (setup_egui_camera, main_menu_spawner))
             .add_systems(Update, load_selected_file_async)
             .add_plugins(FeathersCorePlugin)
-            .add_systems(
-                Update,
-                settings_item_submit.run_if(input_just_pressed(KeyCode::Enter)),
-            )
             .init_state::<ShownTab>()
             .add_systems(StateTransition, apply_display_in_state::<ShownTab>)
             .add_systems(StateTransition, apply_display_in_state::<AppState>)
-            .add_systems(Update, style_tab_header)
+            .add_systems(Update, (style_tab_header, settings::reset_on_keypress))
             // TODO: move to debug
             .add_observer(
                 |e: On<PointerClick>,
@@ -742,14 +734,6 @@ fn header() -> impl Scene {
                 --
                 #Settings
                 @tab_header("Settings", ShownTab::Settings)
-            ]
-            --
-            ThemeBorderColor(tokens::MENU_BORDER)
-            @ui::card(true)
-            Children [
-                @import_beatmap()
-                --
-                @reload_beatmaps()
             ]
         ]
     }

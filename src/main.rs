@@ -27,16 +27,13 @@ use bevy::picking::PickingSettings;
 use bevy_egui::prelude::*;
 
 use bevy::prelude::*;
-use bevy::window::{PrimaryWindow, WindowMode};
 
 use crate::crosshair::CrosshairMaterial;
-use crate::input::{Hovered, InputMessage};
+use crate::input::Hovered;
 use crate::menus::DisplayInState;
+use crate::scenarios::RectangularTransform;
 use crate::scoreing::Score;
-use crate::target::events::TargetHit;
-use crate::target::{
-    CurveMarker, CurveMarkerMaterial, Marker, Target, TargetMarker, TargetResource,
-};
+use crate::target::{CurveMarker, CurveMarkerMaterial, Marker, TargetMarker, TargetResource};
 use fps_camera::{FPSCamera, FPSCameraPlugin, GrabMouse};
 
 #[derive(Resource, Clone, SettingsGroup, Reflect)]
@@ -108,14 +105,14 @@ impl Default for CrosshairSettings {
 #[settings_group(group = "gameplay")]
 pub struct GameplaySettings {
     target_scale: f32,
-    target_distance: f32,
+    rectangular_transform: RectangularTransform,
 }
 
 impl Default for GameplaySettings {
     fn default() -> Self {
         Self {
             target_scale: 1.0,
-            target_distance: 50.,
+            rectangular_transform: RectangularTransform::default(),
         }
     }
 }

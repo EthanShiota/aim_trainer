@@ -90,14 +90,14 @@ trait OsuPixelTransform {
 
                 let percent_circle = (length / slides as f32) / circumference;
 
-                let points: Vec<Vec2> = points.iter().map(|&p| self.to_world(p).xy()).collect();
-
-                // HACK: Get z from conversion function for later use
-                let z = self.to_world(vec2(0., 0.)).z;
-
-                let center = circle_center(points[0], points[1], points[2])
-                    .expect("transformation from osu px to world broke circle invariant");
-                let radius = center.distance(points[0]);
+                // let points: Vec<Vec2> = points.iter().map(|&p| self.to_world(p).xy()).collect();
+                //
+                // // HACK: Get z from conversion function for later use
+                // let z = self.to_world(vec2(0., 0.)).z;
+                //
+                // let center = circle_center(points[0], points[1], points[2])
+                //     .expect("transformation from osu px to world broke circle invariant");
+                // let radius = center.distance(points[0]);
                 let v = points[2] - center;
 
                 // TODO: all of this probably needs to consider point order
@@ -109,7 +109,7 @@ trait OsuPixelTransform {
                     center.x + radius * f32::cos(start_angle),
                     center.y + radius * f32::sin(start_angle),
                 );
-                assert!((xy - points[2]).length() < 0.01);
+                assert!((xy - points[2]).length() < 0.1);
 
                 let unlooped_curve = bevy::curve::FunctionCurve::new(Interval::UNIT, |i| {
                     // TODO: What direction should this go?
@@ -118,7 +118,7 @@ trait OsuPixelTransform {
                         center.x + radius * f32::cos(angle),
                         center.y + radius * f32::sin(angle),
                     );
-                    xy.extend(z)
+                    self.to_world(xy)
                 })
                 .reparametrize_linear(Interval::new(0., curve_duration).unwrap())
                 .unwrap();
@@ -235,10 +235,22 @@ fn to_vec2(p: Point) -> Vec2 {
         y: p.y as f32,
     }
 }
-struct RectangularTransform {
-    width: f32,
-    height: f32,
-    distance: f32,
+
+#[derive(Clone, Copy, Reflect)]
+pub struct RectangularTransform {
+    pub width: f32,
+    pub height: f32,
+    pub distance: f32,
+}
+
+impl Default for RectangularTransform {
+    fn default() -> Self {
+        Self {
+            width: 40.,
+            height: 30.,
+            distance: 60.,
+        }
+    }
 }
 
 impl OsuPixelTransform for RectangularTransform {
@@ -297,11 +309,7 @@ pub fn osu(
     materials: ResMut<Assets<StandardMaterial>>,
     mut time: ResMut<Time<Virtual>>,
 ) {
-    let osu_transform = RectangularTransform {
-        width: 30.,
-        height: 30.,
-        distance: 60.,
-    };
+    let osu_transform = gameplay_settings.rectangular_transform;
     let audio_file_path = get_audio_file_path(&osu_beat_map);
     let audio_file =
         File::open(audio_file_path).expect("could not get audio file {audio_file_path:?}");

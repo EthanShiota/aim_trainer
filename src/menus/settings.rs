@@ -1,7 +1,7 @@
 use std::{f32::consts::PI, ops::RangeInclusive};
 
 use bevy::{
-    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    ecs::{component::Mutable, lifecycle::HookContext, world::DeferredWorld},
     feathers::{
         controls::{
             FeathersButton, FeathersNumberInput, NumberInputPrecision, NumberInputStep, SoftLimit,
@@ -9,25 +9,31 @@ use bevy::{
         theme::{InheritableThemeTextColor, ThemeBorderColor, ThemedText},
         tokens::{self},
     },
-    input_focus::InputFocus,
+    picking::hover::Hovered,
     prelude::*,
     settings::SaveSettings,
-    text::EditableText,
     ui_widgets::Activate,
 };
 use ui::{space, spacing};
 
-use crate::{GameSettings, GameplaySettings, SoundSettings};
+use crate::{
+    GameSettings, GameplaySettings, SoundSettings,
+    menus::{import_beatmap, reload_beatmaps},
+};
 
 // Marker
 #[derive(Component, Clone, Copy, Default)]
-struct SettingsItem;
+#[require(Hovered)]
+pub struct SettingsItem;
 
 pub fn settings_number_input(label: &'static str, range: RangeInclusive<f32>) -> impl Scene {
     bsn! {
         SettingsItem
         SoftLimit(bevy::feathers::controls::NumberInputRange::F32(range))
 
+        on(|e: On<PointerLeave>, mut commands: Commands| {
+            commands.entity(e.event_target()).try_remove::<ConfirmReset>();
+        })
         @FeathersNumberInput {
             @label_text: label,
         }
@@ -48,7 +54,7 @@ macro_rules! settings_sync {
                 } else {
                     ctx.$access
                 };
-                commands.entity(e.event_target()).insert(::bevy::feathers::controls::NumberInputValue::F32(val as _));
+                commands.trigger(::bevy::ui_widgets::ValueChange {source: e.event_target(), value: val as f32 , is_final: true});
             })
 
             on(|val: On<::bevy::ui_widgets::ValueChange<f32>>, mut commands: Commands, mut res: ResMut<$res>| {
@@ -70,47 +76,12 @@ struct ReloadSettings {
 }
 
 #[derive(Component, Default, Clone, Copy)]
-#[component(on_insert)]
-#[component(on_remove)]
-struct ConfirmReset;
-
-impl ConfirmReset {
-    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        let children = world.entity(ctx.entity).get_components::<&Children>();
-        if let Ok(children) = children {
-            let children = children.collection().clone();
-            for text in children.into_iter() {
-                if let Some(mut text) = world.get_mut::<Text>(text) {
-                    text.replace_range(.., "Confirm?");
-                }
-            }
-        }
-    }
-    fn on_remove(mut world: DeferredWorld, ctx: HookContext) {
-        let children = world.entity(ctx.entity).get_components::<&Children>();
-        if let Ok(children) = children {
-            let children = children.collection().clone();
-            for text in children.into_iter() {
-                if let Some(mut text) = world.get_mut::<Text>(text) {
-                    text.replace_range(.., "Reset Settings");
-                }
-            }
-        }
-    }
-}
-pub fn settings_item_submit(mut focus: ResMut<InputFocus>, settings_item: Query<&EditableText>) {
-    if let Some(focus_ent) = focus.get()
-        && settings_item.contains(focus_ent)
-    {
-        focus.clear();
-    }
-}
+pub struct ConfirmReset;
 
 pub fn settings_tab() -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
-            width: space(80.),
             row_gap: spacing::SM,
         }
         ThemeBorderColor(tokens::MENU_BORDER)
@@ -118,57 +89,25 @@ pub fn settings_tab() -> impl Scene {
         InheritableThemeTextColor(tokens::TEXT_MAIN)
 
         Children [
-            @{settings_sync!(SoundSettings => music_volume)}
-            @settings_number_input("Music Volume", 0.0..=1.0)
+            @sound_settings()
             --
-            @{settings_sync!(SoundSettings => effects_volume)}
-            @settings_number_input("Effects Volume", 0.0..=1.0)
+            @game_settings()
             --
-            @{settings_sync!(GameSettings => mouse_sensitivity)}
-            @settings_number_input("Mouse Sensitivity (in/360)", 0.0..=100.0)
-            --
-            @{settings_sync!(GameSettings => dpi)}
-            NumberInputStep(400.)
-            NumberInputPrecision(0)
-            @settings_number_input("DPI", 400.0..=8000.0)
-            --
-            @{settings_sync!(GameSettings => fov)}
-            @settings_number_input("Vertical FOV in radians", 0.0..=PI)
-            --
-            @{settings_sync!(GameplaySettings => target_scale)}
-            @settings_number_input("Target Scale", 0.0..=2.0)
+            @gameplay_settings()
             --
             @FeathersButton
-            on(|e: On<Activate>,
-                mut commands: Commands,
-                q: Query<Has<ConfirmReset>>,
-                q_parent: Query<&ChildOf>,
-                q_children: Query<&Children>,
-                q_settings_item: Query<(),
-                With<SettingsItem>>| -> Result {
-                if q.get(e.event_target())? {
-
-                    commands.insert_resource(GameSettings::default());
-                    commands.insert_resource(SoundSettings::default());
-                    commands.insert_resource(GameplaySettings::default());
-                    commands.queue(SaveSettings::IfChanged);
-
-                    // trigger reload for all children of settings tab
-                    let p = q_parent.get(e.event_target())?.parent();
-                    let children = q_children.get(p)?;
-                    for child in children {
-                        if q_settings_item.contains(*child) {
-                            commands.entity(*child).trigger(|entity| ReloadSettings{entity, reset: false});
-                        }
-                    }
-                    commands.entity(e.event_target()).remove::<ConfirmReset>();
-
-                } else {
-                    commands.entity(e.event_target()).insert(ConfirmReset);
+            on(reset_settings)
+            on(|e: On<Insert<ConfirmReset>>, mut text: Query<(&ChildOf, &mut Text)>| {
+                if let Some((_, mut text)) = text.iter_mut().find(|(c, _)| c.parent() == e.event_target()) {
+                    text.replace_range(.., "Confirm?");
                 }
-                Ok(())
-
             })
+            on(|e: On<Remove<ConfirmReset>>, mut text: Query<(&ChildOf, &mut Text)>| {
+                if let Some((_, mut text)) = text.iter_mut().find(|(c, _)| c.parent() == e.event_target()) {
+                    text.replace_range(.., "Reset Settings");
+                }
+            })
+
             on(|e: On<PointerLeave>, mut commands: Commands| {
                 commands.entity(e.event_target()).try_remove::<ConfirmReset>();
             })
@@ -176,6 +115,159 @@ pub fn settings_tab() -> impl Scene {
                 ThemedText
                 Text("Reset Settings")
             ]
+            --
+            ThemeBorderColor(tokens::MENU_BORDER)
+            @ui::card(true)
+            Node {
+                flex_direction: FlexDirection::Column
+            }
+            Children [
+                @import_beatmap()
+                --
+                @reload_beatmaps()
+            ]
         ]
+    }
+}
+
+fn settings_group(label: &'static str) -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Column,
+            width: space(80.),
+            row_gap: spacing::SM,
+        }
+        @ui::card(true)
+        Children [
+            ThemedText
+            Text(label)
+        ]
+    }
+}
+
+fn sound_settings() -> impl Scene {
+    bsn! {
+        @settings_group("Sound")
+        Children [
+            @{settings_sync!(SoundSettings => music_volume)}
+            @settings_number_input("Music Volume", 0.0..=1.0)
+            --
+            @{settings_sync!(SoundSettings => effects_volume)}
+            @settings_number_input("Effects Volume", 0.0..=1.0)
+        ]
+    }
+}
+
+fn game_settings() -> impl Scene {
+    bsn! {
+        @settings_group("Game")
+        Children [
+            @{settings_sync!(GameSettings => mouse_sensitivity)}
+            @settings_number_input("Mouse Sensitivity (in/360)", 0.0..=100.0)
+            --
+            NumberInputStep(400.)
+            NumberInputPrecision(-2)
+            @{settings_sync!(GameSettings => dpi)}
+            @settings_number_input("DPI", 400.0..=8000.0)
+            --
+            @{settings_sync!(GameSettings => fov)}
+            @settings_number_input("Vertical FOV in radians", 0.0..=PI)
+        ]
+    }
+}
+
+fn gameplay_settings() -> impl Scene {
+    bsn! {
+        @settings_group("Gameplay")
+        Children [
+            @{settings_sync!(GameplaySettings => target_scale)}
+            @settings_number_input("Target Scale", 0.0..=2.0)
+            --
+            @settings_input::<GameplaySettings, f32>(|s| {s.rectangular_transform.width}, |mut s, v| {s.rectangular_transform.width = v;})
+            @settings_number_input("Width", 10.0..=100.0)
+            --
+
+            @settings_input::<GameplaySettings, f32>(|s| {s.rectangular_transform.height}, |mut s, v| {s.rectangular_transform.height = v;})
+            @settings_number_input("Height", 10.0..=100.0)
+            --
+            @settings_input::<GameplaySettings, f32>(|s| {s.rectangular_transform.distance}, |mut s, v| {s.rectangular_transform.distance = v;})
+            @settings_number_input("Distance", 10.0..=100.0)
+        ]
+    }
+}
+
+fn settings_input<T, O>(
+    get: impl Fn(&T) -> O + Send + Sync + Copy + 'static,
+    set: impl Fn(ResMut<T>, O) + Send + Sync + Copy + 'static,
+) -> impl Scene
+where
+    T: Default + Resource<Mutability = Mutable> + Clone + Sized,
+    O: Into<f32> + From<f32>,
+{
+    bsn! {
+        template(move |ctx| {
+            let val = get(ctx.resource::<T>());
+            Ok(::bevy::feathers::controls::NumberInputValue::F32(val.into()))
+        })
+        on(move |e: On<ReloadSettings>, ctx: Res<T>, mut commands: Commands| {
+                let val = if e.reset {
+                    get(&T::default())
+                } else {
+                    get(ctx.as_ref())
+                };
+                commands.trigger(::bevy::ui_widgets::ValueChange::<f32> {source: e.event_target(), value: val.into() , is_final: true});
+        })
+        on(move |val: On<::bevy::ui_widgets::ValueChange<f32>>, mut commands: Commands, res: ResMut<T>| {
+            if val.is_final {
+                set(res, O::from(val.value));
+                commands.queue(::bevy::settings::SaveSettingsDeferred::default());
+            }
+            commands.entity(val.event_target()).insert(::bevy::feathers::controls::NumberInputValue::F32(val.value as _));
+        })
+    }
+}
+
+fn reset_settings(
+    e: On<Activate>,
+    mut commands: Commands,
+    q: Query<Has<ConfirmReset>>,
+    q_settings_item: Query<Entity, With<SettingsItem>>,
+) -> Result {
+    if q.get(e.event_target())? {
+        for child in q_settings_item {
+            commands.entity(child).trigger(|entity| ReloadSettings {
+                entity,
+                reset: true,
+            });
+        }
+        commands.entity(e.event_target()).remove::<ConfirmReset>();
+        commands.queue(SaveSettings::IfChanged);
+    } else {
+        commands.entity(e.event_target()).insert(ConfirmReset);
+    }
+    Ok(())
+}
+
+pub fn reset_on_keypress(
+    mut commands: Commands,
+    settings_items: Query<(Entity, &Hovered, Has<ConfirmReset>), With<SettingsItem>>,
+    key: Res<ButtonInput<KeyCode>>,
+) {
+    if key.just_pressed(KeyCode::KeyR) {
+        for (entity, &Hovered(hover), confirm) in settings_items {
+            match (hover, confirm) {
+                (true, true) => {
+                    commands.entity(entity).trigger(|entity| ReloadSettings {
+                        entity,
+                        reset: true,
+                    });
+                    commands.entity(entity).remove::<ConfirmReset>();
+                }
+                (true, false) => {
+                    commands.entity(entity).insert(ConfirmReset);
+                }
+                _ => (),
+            }
+        }
     }
 }

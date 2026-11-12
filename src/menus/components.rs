@@ -1,10 +1,8 @@
 use bevy::{
     color::palettes::tailwind,
     ecs::{
-        lifecycle::HookContext,
         system::IntoObserverSystem,
         template::{FnTemplate, TemplateContext},
-        world::DeferredWorld,
     },
     feathers::{
         controls::{FeathersNumberInput, NumberInputValue},
@@ -15,15 +13,11 @@ use bevy::{
         },
         tokens::{self},
     },
-    input_focus::tab_navigation::TabIndex,
     prelude::*,
-    text::{EditableText, TextCursorStyle},
-    ui_widgets::TextInput,
 };
 
 use bevy::settings::SaveSettingsDeferred;
 
-use bevy::text::TextEditChange;
 use ui::{space, spacing};
 
 use crate::{Crosshair, crosshair::CrosshairMaterial};
