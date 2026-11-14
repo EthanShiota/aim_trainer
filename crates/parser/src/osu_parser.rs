@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, path::PathBuf};
+use std::{any::Any, collections::HashMap, error::Error, path::PathBuf};
 use tracing::{debug, debug_span};
 
 use nom::{
@@ -17,6 +17,9 @@ use nom::{
     number::complete::recognize_float,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
 };
+
+type KV<'a> = HashMap<&'a str, &'a str>;
+type List<'a> = Vec<Vec<&'a str>>;
 
 #[derive(Clone, Debug)]
 pub struct HitObject {
@@ -148,6 +151,23 @@ pub struct General {
     pub audio_lead_in: usize,
 }
 
+impl<'a> TryFrom<&KV<'a>> for General {
+    type Error = String;
+    fn try_from(value: &KV) -> Result<Self, Self::Error> {
+        Ok(Self {
+            audio_filename: value
+                .get("AudioFilename")
+                .ok_or("Missing AudioFilename")?
+                .to_string(),
+            audio_lead_in: value
+                .get("AudioLeadIn")
+                .ok_or("Missing AudioLeadIn")?
+                .parse()
+                .unwrap(),
+        })
+    }
+}
+
 // #[derive(Clone)]
 // pub struct Events {
 //
@@ -170,6 +190,39 @@ pub struct Metadata {
     pub beatmap_id: Option<i32>,
     pub beatmap_set_id: Option<i32>,
 }
+
+impl<'a> TryFrom<&KV<'a>> for Metadata {
+    type Error = String;
+    fn try_from(value: &KV<'a>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            title: value.get("Title").ok_or("Missing Title")?.to_string(),
+            version: value.get("Version").ok_or("Missing Version")?.to_string(),
+            title_unicode: value
+                .get("TitleUnicode")
+                .or_else(|| value.get("Title"))
+                .unwrap()
+                .to_string(),
+            artist: value.get("Artist").ok_or("Missing Artist")?.to_string(),
+            artist_unicode: value
+                .get("ArtistUnicode")
+                .or_else(|| value.get("Artist"))
+                .unwrap()
+                .to_string(),
+            creator: value.get("Creator").ok_or("Missing Creator")?.to_string(),
+            source: value.get("Source").ok_or("Missing Source")?.to_string(),
+            // Space seperated
+            tags: value
+                .get("Tags")
+                .ok_or("Missing Tags")?
+                .split(' ')
+                .map(str::to_string)
+                .collect(),
+            beatmap_id: value.get("BeatmapID").and_then(|&s| s.parse().ok()),
+            beatmap_set_id: value.get("BeatmapSetID").and_then(|&s| s.parse().ok()),
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct Difficulty {
     pub hp_drain_rate: f32,
@@ -178,6 +231,37 @@ pub struct Difficulty {
     pub approach_rate: f32,
     pub slider_multiplier: f32,
     pub slider_tick_rate: f32,
+}
+impl<'a> TryFrom<&KV<'a>> for Difficulty {
+    type Error = Box<dyn Error>;
+    fn try_from(difficulty: &KV) -> Result<Self, Self::Error> {
+        Ok(Self {
+            hp_drain_rate: difficulty
+                .get("HPDrainRate")
+                .ok_or("Missing HPDrainRate")?
+                .parse()?,
+            circle_size: difficulty
+                .get("CircleSize")
+                .ok_or("Missing CircleSize")?
+                .parse()?,
+            overall_difficulty: difficulty
+                .get("OverallDifficulty")
+                .ok_or("Missing OverallDifficulty")?
+                .parse()?,
+            approach_rate: difficulty
+                .get("ApproachRate")
+                .ok_or("Missing ApproachRate")?
+                .parse()?,
+            slider_multiplier: difficulty
+                .get("SliderMultiplier")
+                .ok_or("Missing SliderMultiplier")?
+                .parse()?,
+            slider_tick_rate: difficulty
+                .get("SliderTickRate")
+                .ok_or("Missing SliderTickRate")?
+                .parse()?,
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -234,56 +318,70 @@ pub struct BeatMapOsu {
     pub hit_objects: Vec<HitObject>,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-enum OsuHeader {
-    General,
-    Editor,
-    Metadata,
-    Difficulty,
-    Events,
-    TimingPoints,
-    Colours,
-    HitObjects,
+#[derive(Debug, Eq, PartialEq)]
+enum OsuSection<'a> {
+    General(KV<'a>),
+    Editor(KV<'a>),
+    Metadata(KV<'a>),
+    Difficulty(KV<'a>),
+    Events(List<'a>),
+    TimingPoints(List<'a>),
+    Colours(KV<'a>),
+    HitObjects(List<'a>),
 }
 
-#[derive(Debug)]
-enum OsuValue<'a> {
-    KV(HashMap<&'a str, &'a str>),
-    List(Vec<Vec<&'a str>>),
+impl<'a> Ord for OsuSection<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let lhs = match self {
+            OsuSection::General(_) => 1,
+            OsuSection::Editor(_) => 2,
+            OsuSection::Metadata(_) => 3,
+            OsuSection::Difficulty(_) => 4,
+            OsuSection::Events(_) => 5,
+            OsuSection::TimingPoints(_) => 6,
+            OsuSection::Colours(_) => 7,
+            OsuSection::HitObjects(_) => 8,
+        };
+
+        let rhs = match other {
+            OsuSection::General(_) => 1,
+            OsuSection::Editor(_) => 2,
+            OsuSection::Metadata(_) => 3,
+            OsuSection::Difficulty(_) => 4,
+            OsuSection::Events(_) => 5,
+            OsuSection::TimingPoints(_) => 6,
+            OsuSection::Colours(_) => 7,
+            OsuSection::HitObjects(_) => 8,
+        };
+        lhs.cmp(&rhs)
+    }
 }
 
-fn section_header(input: &str) -> IResult<&str, OsuHeader> {
-    map(
-        terminated(
-            delimited(char('['), recognize(alphanumeric1), char(']')),
-            line_ending,
-        ),
-        |res| match res {
-            "General" => OsuHeader::General,
-            "Editor" => OsuHeader::Editor,
-            "Metadata" => OsuHeader::Metadata,
-            "Difficulty" => OsuHeader::Difficulty,
-            "Events" => OsuHeader::Events,
-            "TimingPoints" => OsuHeader::TimingPoints,
-            "Colours" => OsuHeader::Colours,
-            "HitObjects" => OsuHeader::HitObjects,
-            _ => unimplemented!(),
-        },
-    )
-    .parse_complete(input)
+impl<'a> PartialOrd for OsuSection<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
-fn parser<'a>(
-    input: &'a str,
-) -> IResult<&'a str, (&'a str, Vec<(OsuHeader, OsuValue<'a>)>), nom::error::Error<&'a str>> {
-    let metadata = terminated(not_line_ending, multispace1);
+fn section<'a>(input: &'a str) -> IResult<&'a str, OsuSection<'a>> {
+    let header = terminated(
+        delimited(char('['), recognize(alphanumeric1), char(']')),
+        line_ending,
+    );
+
+    let body = take_until("\n[").or(rest).or(eof);
+
     let comment = |input: &'a str| {
         many0(terminated(
-            preceded(tag("//"), not_line_ending::<&str, nom::error::Error<&str>>),
+            preceded(
+                tag("//"),
+                not_line_ending::<&'a str, nom::error::Error<&'a str>>,
+            ),
             multispace0,
         ))
         .parse_complete(input)
     };
+
     let key_value = |input: &'a str| {
         context(
             "key_value",
@@ -310,30 +408,42 @@ fn parser<'a>(
         )
         .parse_complete(input)
     };
-    let body = take_until("\n[").or(rest).or(eof);
 
-    let section = pair(section_header, terminated(body, multispace0)).map(|(header, body)| {
-        debug!(?header);
-        debug!(?body);
-        let values = match header {
-            OsuHeader::General
-            | OsuHeader::Editor
-            | OsuHeader::Metadata
-            | OsuHeader::Difficulty
-            | OsuHeader::Colours => many0(delimited(comment, key_value, comment))
-                .parse_complete(body)
-                .inspect(|(l, value)| debug!(l, ?value))
-                .map(|(_, value)| OsuValue::KV(value.into_iter().collect())),
-            OsuHeader::Events | OsuHeader::TimingPoints | OsuHeader::HitObjects => {
-                many0(delimited(comment, list_value, comment))
-                    .parse_complete(body)
-                    .inspect(|(l, value)| debug!(l, ?value))
-                    .map(|(_, value)| OsuValue::List(value))
-            }
-        }
-        .expect("section parser failed");
-        (header, values)
-    });
+    let kv = |body: &'a str| {
+        many0(delimited(comment, key_value, comment))
+            .parse_complete(body)
+            .inspect(|(l, value)| debug!(l, ?value))
+            .map(|(_, value)| value.into_iter().collect::<KV>())
+    };
+
+    let list = |body| {
+        many0(delimited(comment, list_value, comment))
+            .parse_complete(body)
+            .inspect(|(l, value)| debug!(l, ?value))
+            .map(|(_, value)| value)
+    };
+
+    map(
+        pair(header, terminated(body, multispace0)),
+        |(header, body)| match header {
+            "General" => OsuSection::General(kv(body).unwrap()),
+            "Editor" => OsuSection::Editor(kv(body).unwrap()),
+            "Metadata" => OsuSection::Metadata(kv(body).unwrap()),
+            "Difficulty" => OsuSection::Difficulty(kv(body).unwrap()),
+            "Events" => OsuSection::Events(list(body).unwrap()),
+            "TimingPoints" => OsuSection::TimingPoints(list(body).unwrap()),
+            "Colours" => OsuSection::Colours(kv(body).unwrap()),
+            "HitObjects" => OsuSection::HitObjects(list(body).unwrap()),
+            _ => unimplemented!(),
+        },
+    )
+    .parse_complete(input)
+}
+
+fn parser<'a>(
+    input: &'a str,
+) -> IResult<&'a str, (&'a str, Vec<OsuSection<'a>>), nom::error::Error<&'a str>> {
+    let metadata = terminated(not_line_ending, multispace1);
 
     pair(metadata, many1(context("section", section))).parse_complete(input)
 }
@@ -347,78 +457,45 @@ impl BeatMapOsu {
         let _guard = span.enter();
         debug!(file_name = ?file_name);
         let (extra, parse_res) = parser(&s).map_err(|e| e.to_owned())?;
-        let (_metadata, sections) = parse_res;
-        let sections: HashMap<OsuHeader, OsuValue> = sections.into_iter().collect();
+        let (_metadata, mut sections) = parse_res;
         debug!("extra {:#?}", extra);
         debug!("sections {:#?}", sections);
-        let OsuValue::KV(general) = sections.get(&OsuHeader::General).unwrap() else {
-            unreachable!()
-        };
-        let OsuValue::KV(metadata) = sections.get(&OsuHeader::Metadata).unwrap() else {
-            unreachable!()
-        };
-        let OsuValue::List(hitobj) = sections.get(&OsuHeader::HitObjects).unwrap() else {
-            unreachable!()
+
+        sections.sort();
+        let [
+            OsuSection::General(general),
+            OsuSection::Editor(_editor),
+            OsuSection::Metadata(metadata),
+            OsuSection::Difficulty(difficulty),
+            OsuSection::Events(_events),
+            OsuSection::TimingPoints(timing_points),
+            OsuSection::Colours(_colours),
+            OsuSection::HitObjects(hit_objects),
+        ] = sections.as_slice()
+        else {
+            return Err("section missing".into());
         };
 
-        let OsuValue::KV(difficulty) = sections.get(&OsuHeader::Difficulty).unwrap() else {
-            unreachable!()
-        };
-
-        let OsuValue::List(timing_points) = sections.get(&OsuHeader::TimingPoints).unwrap() else {
-            unreachable!()
-        };
-
-        let timing_points: Vec<_> = timing_points
-            .iter()
+        let timing_points: Vec<TimingPoint> = timing_points
+            .into_iter()
             .map(|e| TimingPoint::try_from(e.as_slice()).unwrap())
+            .collect();
+
+        let hit_objects: Vec<HitObject> = hit_objects
+            .iter()
+            .map(|s| s.as_slice().try_into().unwrap())
             .collect();
 
         // INFO: this should be sorted
         // TODO: Don't do this
         assert!(timing_points.is_sorted_by_key(|k| k.time));
-        let hit_objects: Vec<HitObject> = hitobj
-            .iter()
-            .map(|s| s.as_slice().try_into().unwrap())
-            .collect();
-
         assert!(hit_objects.is_sorted_by_key(|k| k.time));
 
         Ok(BeatMapOsu {
             beat_map_path: value,
-            general: General {
-                audio_filename: general["AudioFilename"].to_string(),
-                audio_lead_in: general["AudioLeadIn"].parse().unwrap(),
-            },
-            metadata: Metadata {
-                title: metadata["Title"].to_string(),
-                version: metadata["Version"].to_string(),
-                title_unicode: metadata
-                    .get("TitleUnicode")
-                    .or_else(|| metadata.get("Title"))
-                    .unwrap()
-                    .to_string(),
-                artist: metadata["Artist"].to_string(),
-                artist_unicode: metadata
-                    .get("ArtistUnicode")
-                    .or_else(|| metadata.get("Artist"))
-                    .unwrap()
-                    .to_string(),
-                creator: metadata["Creator"].to_string(),
-                source: metadata["Source"].to_string(),
-                // Space seperated
-                tags: metadata["Tags"].split(' ').map(str::to_string).collect(),
-                beatmap_id: metadata.get("BeatmapID").and_then(|&s| s.parse().ok()),
-                beatmap_set_id: metadata.get("BeatmapSetID").and_then(|&s| s.parse().ok()),
-            },
-            difficulty: Difficulty {
-                hp_drain_rate: difficulty["HPDrainRate"].parse().unwrap(),
-                circle_size: difficulty["CircleSize"].parse().unwrap(),
-                overall_difficulty: difficulty["OverallDifficulty"].parse().unwrap(),
-                approach_rate: difficulty["ApproachRate"].parse().unwrap(),
-                slider_multiplier: difficulty["SliderMultiplier"].parse().unwrap(),
-                slider_tick_rate: difficulty["SliderTickRate"].parse().unwrap(),
-            },
+            general: General::try_from(general).unwrap(),
+            metadata: Metadata::try_from(metadata).unwrap(),
+            difficulty: Difficulty::try_from(difficulty).unwrap(),
             timing_points,
             hit_objects,
         })
@@ -477,23 +554,6 @@ fn parser_test() {
 fn nom_parser_test() {
     let input = include_str!("../test/Kuba Oms - My Love (W h i t e) [Insane].osu");
     let (_, (metadata, res)) = parser(input).unwrap();
-
-    println!("meta: {}", metadata);
-    for (header, value) in res {
-        println!("header: {:?}", header);
-        match value {
-            OsuValue::KV(value) => {
-                for (k, v) in value {
-                    println!("{} = {}", k, v);
-                }
-            }
-            OsuValue::List(list) => {
-                for item in list {
-                    println!("{item:?}");
-                }
-            }
-        }
-    }
 }
 
 #[test]
@@ -503,18 +563,4 @@ fn hit_object_test() {
         "../test/Windbell - Flow of Life (TSAR  Tu Zi ST Remix) (vivicat) [Extra].osu"
     );
     let (_, (_metadata, res)) = parser(input).unwrap();
-    let map: std::collections::HashMap<_, _> = res.into_iter().collect();
-    if let Some(OsuValue::List(list)) = map.get(&OsuHeader::HitObjects) {
-        let hit_objs: Vec<HitObject> = list
-            .into_iter()
-            .map(|s| s.as_slice().try_into().unwrap())
-            .collect();
-        for slider in hit_objs.iter().filter(|o| {
-            o.object_params
-                .as_ref()
-                .is_some_and(|param| &param.curve_type == &Bezier)
-        }) {
-            println!("{:?}", slider.object_params.as_ref().unwrap().curve_points);
-        }
-    }
 }
