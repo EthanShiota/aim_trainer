@@ -177,6 +177,7 @@ fn main() {
             effects::EffectPlugin,
             target::TargetPlugin,
             state::StatePlugin,
+            database::DatabasePlugin,
         ))
         .add_plugins(SettingsPlugin::new("com.github.EthanShiota.aim_trainer"))
         .init_resource::<GameSettings>()

@@ -552,8 +552,8 @@ fn beatmap_version_selector() -> impl Scene {
                             overflow: Overflow::hidden(),
                         }
                         on(move |_: On<Activate>, mut commands: Commands| {
-                            commands.set_state(AppState::InGame);
                             commands.run_system_cached_with(scenarios::osu, ver.clone());
+                            commands.set_state(AppState::InGame);
                         })
 
                         Children [

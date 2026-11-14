@@ -13,7 +13,7 @@ use parser::BeatMapOsu;
 use tracing::instrument;
 use ui::spacing;
 
-use crate::{AppState, target::events::TargetHit};
+use crate::AppState;
 pub struct ScoringPlugin;
 
 #[derive(Resource)]
@@ -24,6 +24,26 @@ pub struct Score {
     pub hit_counts: HitCounts,
     pub combo: usize,
     pub metadata: Arc<BeatMapOsu>,
+}
+
+impl From<&Score> for database::commands::InsertScore {
+    fn from(value: &Score) -> Self {
+        Self {
+            accuracy: value.hit_counts.accuracy() as f32,
+            score: value.points as u32,
+            beatmap_id: value.metadata.metadata.beatmap_id.unwrap() as u32,
+        }
+    }
+}
+
+impl From<&Score> for database::commands::InsertBeatmap {
+    fn from(value: &Score) -> Self {
+        Self {
+            beatmap_id: value.metadata.metadata.beatmap_id.unwrap() as u32,
+            title: value.metadata.metadata.title.clone(),
+            version: value.metadata.metadata.version.clone(),
+        }
+    }
 }
 
 #[derive(Default)]

@@ -18,3 +18,4 @@ devenv.local.yaml
 /windows_release
 /linux.zip
 /windows.zip
+/data.db

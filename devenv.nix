@@ -18,6 +18,7 @@
     mold
     libxkbcommon
     libclang
+    openssl
   ];
   env.LD_LIBRARY_PATH = with pkgs;
 

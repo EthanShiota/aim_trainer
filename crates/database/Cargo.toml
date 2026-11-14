@@ -1,0 +1,13 @@
+[package]
+name = "database"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+sqlx = { version = "0.9.0", features = [
+  "sqlite",
+  "macros",
+  "tls-native-tls",
+  "runtime-async-std",
+] }

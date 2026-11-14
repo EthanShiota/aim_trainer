@@ -440,14 +440,16 @@ pub fn osu(
     };
 
     debug!("leadin: {:?}", leadin);
-    let resource = beat_map.spawn(commands.reborrow(), sound_settings);
-    commands.insert_resource(resource);
-    commands.insert_resource(Score::new(
+    let score = Score::new(
         0.0,
         osu_beat_map.difficulty.overall_difficulty,
         osu_beat_map.difficulty_multiplier(),
         osu_beat_map.clone(),
-    ));
+    );
+    commands.queue(database::commands::InsertBeatmap::from(&score));
+    let resource = beat_map.spawn(commands.reborrow(), sound_settings);
+    commands.insert_resource(resource);
+    commands.insert_resource(score);
 }
 
 fn get_audio_file_path(osu_beat_map: &BeatMapOsu) -> PathBuf {

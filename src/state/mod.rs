@@ -72,6 +72,7 @@ pub mod transition {
         **grab_mode = false;
         cursor_options.grab_mode = CursorGrabMode::None;
         cursor_options.visible = true;
+        commands.queue(database::commands::InsertScore::from(score.as_ref()));
         commands.spawn_scene(menus::score_summery_menu(&score));
     }
 
